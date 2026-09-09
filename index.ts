@@ -64,7 +64,7 @@ export default function contribute(plugin: PluginContext) {
   const commands = [
     { id: "off", title: "Caffeine: off", input: { mode: "off" } as const },
     { id: "on", title: "Caffeine: on", input: { mode: "on" } as const },
-    { id: "3h", title: "Caffeine: 3 hours", input: { mode: "timer", hours: 3 } as const },
+    { id: "timer-3h", title: "Caffeine: 3 hours", input: { mode: "timer", hours: 3 } as const },
     { id: "auto", title: "Caffeine: while agents work", input: { mode: "auto" } as const },
   ];
   for (const command of commands) {

@@ -52,6 +52,11 @@ daemon: the object keeps answering long after the request that carried it.
 bundles; `process.versions.node` exists only on the daemon, so the controller starts
 there and the client bundle never touches a `*.server.ts` export.
 
+**Command Center ids start with a letter.** `3h` was refused by the app with "Invalid
+Command Center item id", and one bad item takes the whole client contribution down with
+it — sidebar entry included — while `paseo plugin ls` still says `running`. The message
+appears only in the desktop app's own log, `~/Library/Logs/Paseo/main.log`.
+
 **Tests run the TypeScript sources directly** under `node --test`, which is why relative
 imports carry their `.ts` extension and type imports say `import type`. The bundler is
 happy either way; Node is not.
