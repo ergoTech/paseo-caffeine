@@ -3,80 +3,124 @@ export type Locale = "en" | "ru" | "uk";
 export interface Strings {
   sidebarTitle: string;
   title: string;
-  sleeps: string;
-  awakeOn: string;
-  awakeTimer(remaining: string): string;
-  awakeAuto(agents: number): string;
-  autoIdle: string;
-  autoWaiting: string;
+  tagline: string;
+  taglineDetail: string;
+  stateAwake: string;
+  stateAsleep: string;
+  remaining(remaining: string): string;
+  agentsRunning(agents: number): string;
+  agentsIdle: string;
+  agentsWaiting: string;
+  untilOff: string;
+  modeLabel: string;
   off: string;
+  offDetail: string;
   on: string;
-  h1: string;
-  h3: string;
-  h8: string;
+  onDetail: string;
+  timer: string;
+  timerDetail: string;
   auto: string;
+  autoDetail: string;
   hours(n: number): string;
   minutes(n: number): string;
+  howTitle: string;
+  how1: string;
+  how2: string;
+  how3: string;
+  updated(secondsAgo: number): string;
   errorPrefix: string;
 }
 
 const en: Strings = {
   sidebarTitle: "Caffeine",
   title: "Caffeine",
-  sleeps: "The Mac sleeps as usual.",
-  awakeOn: "The Mac stays awake until you turn this off.",
-  awakeTimer: (remaining) => `The Mac stays awake, ${remaining} left.`,
-  awakeAuto: (agents) => `The Mac stays awake while agents work — ${agents} running.`,
-  autoIdle: "No agents running; the Mac may sleep.",
-  autoWaiting: "Waiting for the first word from the daemon about agents.",
+  tagline: "Keeps the Mac awake for your agents.",
+  taglineDetail: "Only system sleep is held; the display goes dark as usual.",
+  stateAwake: "AWAKE",
+  stateAsleep: "SLEEPS AS USUAL",
+  remaining: (remaining) => `${remaining} left`,
+  agentsRunning: (agents) => `${agents} agent${agents === 1 ? "" : "s"} running`,
+  agentsIdle: "no agents running",
+  agentsWaiting: "waiting for the daemon",
+  untilOff: "until you turn it off",
+  modeLabel: "Mode",
   off: "Off",
+  offDetail: "macOS decides",
   on: "On",
-  h1: "1 h",
-  h3: "3 h",
-  h8: "8 h",
+  onDetail: "until you turn it off",
+  timer: "Timer",
+  timerDetail: "then back to Off by itself",
   auto: "While agents work",
+  autoDetail: "releases three minutes after the last agent goes quiet",
   hours: (n) => `${n} h`,
   minutes: (n) => `${n} min`,
+  howTitle: "How it works",
+  how1: "Runs caffeinate -i -s tied to this plugin's process, so it can never be orphaned.",
+  how2: "The mode survives a daemon restart; a timer expires within thirty seconds of its deadline.",
+  how3: "A closed lid still puts a MacBook to sleep, caffeinate or not.",
+  updated: (s) => (s < 5 ? "updated just now" : `updated ${s} s ago`),
   errorPrefix: "caffeinate failed",
 };
 
 const ru: Strings = {
   sidebarTitle: "Кофеин",
   title: "Кофеин",
-  sleeps: "Mac засыпает как обычно.",
-  awakeOn: "Mac не спит, пока не выключишь.",
-  awakeTimer: (remaining) => `Mac не спит, осталось ${remaining}.`,
-  awakeAuto: (agents) => `Mac не спит, пока работают агенты — сейчас ${agents}.`,
-  autoIdle: "Агенты не работают, Mac может спать.",
-  autoWaiting: "Жду первого ответа демона про агентов.",
+  tagline: "Не даёт Mac уснуть, пока работают агенты.",
+  taglineDetail: "Только сон системы: экран гаснет как обычно.",
+  stateAwake: "НЕ СПИТ",
+  stateAsleep: "СПИТ КАК ОБЫЧНО",
+  remaining: (remaining) => `осталось ${remaining}`,
+  agentsRunning: (agents) => `работает агентов: ${agents}`,
+  agentsIdle: "агенты не работают",
+  agentsWaiting: "жду ответа демона",
+  untilOff: "пока не выключишь",
+  modeLabel: "Режим",
   off: "Выкл",
+  offDetail: "решает macOS",
   on: "Вкл",
-  h1: "1 ч",
-  h3: "3 ч",
-  h8: "8 ч",
+  onDetail: "пока не выключишь",
+  timer: "Таймер",
+  timerDetail: "потом сам вернётся в Выкл",
   auto: "Пока работают агенты",
+  autoDetail: "отпускает через три минуты после последнего агента",
   hours: (n) => `${n} ч`,
   minutes: (n) => `${n} мин`,
+  howTitle: "Как это работает",
+  how1: "Держит caffeinate -i -s, привязанный к процессу плагина, так что сирот не остаётся.",
+  how2: "Режим переживает перезапуск демона; таймер гаснет в пределах тридцати секунд от срока.",
+  how3: "Закрытая крышка всё равно усыпляет MacBook, с caffeinate или без.",
+  updated: (s) => (s < 5 ? "обновлено только что" : `обновлено ${s} с назад`),
   errorPrefix: "caffeinate не запустился",
 };
 
 const uk: Strings = {
   sidebarTitle: "Кофеїн",
   title: "Кофеїн",
-  sleeps: "Mac засинає як зазвичай.",
-  awakeOn: "Mac не спить, доки не вимкнеш.",
-  awakeTimer: (remaining) => `Mac не спить, залишилось ${remaining}.`,
-  awakeAuto: (agents) => `Mac не спить, доки працюють агенти — зараз ${agents}.`,
-  autoIdle: "Агенти не працюють, Mac може спати.",
-  autoWaiting: "Чекаю першої відповіді демона про агентів.",
+  tagline: "Не дає Mac заснути, доки працюють агенти.",
+  taglineDetail: "Лише сон системи: екран гасне як зазвичай.",
+  stateAwake: "НЕ СПИТЬ",
+  stateAsleep: "СПИТЬ ЯК ЗАЗВИЧАЙ",
+  remaining: (remaining) => `залишилось ${remaining}`,
+  agentsRunning: (agents) => `працює агентів: ${agents}`,
+  agentsIdle: "агенти не працюють",
+  agentsWaiting: "чекаю відповіді демона",
+  untilOff: "доки не вимкнеш",
+  modeLabel: "Режим",
   off: "Вимк",
+  offDetail: "вирішує macOS",
   on: "Увімк",
-  h1: "1 год",
-  h3: "3 год",
-  h8: "8 год",
+  onDetail: "доки не вимкнеш",
+  timer: "Таймер",
+  timerDetail: "потім сам повернеться у Вимк",
   auto: "Доки працюють агенти",
+  autoDetail: "відпускає через три хвилини після останнього агента",
   hours: (n) => `${n} год`,
   minutes: (n) => `${n} хв`,
+  howTitle: "Як це працює",
+  how1: "Тримає caffeinate -i -s, прив'язаний до процесу плагіна, тож сиріт не лишається.",
+  how2: "Режим переживає перезапуск демона; таймер гасне в межах тридцяти секунд від строку.",
+  how3: "Закрита кришка все одно присипляє MacBook, з caffeinate чи без.",
+  updated: (s) => (s < 5 ? "оновлено щойно" : `оновлено ${s} с тому`),
   errorPrefix: "caffeinate не запустився",
 };
 
