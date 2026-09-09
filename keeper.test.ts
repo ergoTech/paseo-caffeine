@@ -5,18 +5,27 @@ import { createKeeper } from "./keeper.server.ts";
 /** A child that lives until killed: the shape of caffeinate without needing macOS. */
 const sleeper = { command: process.execPath, args: ["-e", "setInterval(() => {}, 1000)"] };
 
+/**
+ * Wait for a condition instead of a fixed pause: under a parallel test run a fresh
+ * node child can take longer than any guess to start or to exit.
+ */
+async function waitFor(condition: () => boolean, timeoutMs = 3000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition()) {
+    if (Date.now() > deadline) throw new Error("condition not met in time");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
 const settle = () => new Promise((resolve) => setTimeout(resolve, 150));
 
 test("hold starts a child and release stops it", async () => {
   const keeper = createKeeper(sleeper);
   assert.equal(keeper.active(), false);
   keeper.hold();
-  await settle();
-  assert.equal(keeper.active(), true);
+  await waitFor(() => keeper.active());
   assert.equal(keeper.error(), "");
   keeper.release();
-  await settle();
-  assert.equal(keeper.active(), false);
+  await waitFor(() => !keeper.active());
 });
 
 test("holding twice keeps the same child", async () => {
@@ -34,7 +43,7 @@ test("holding twice keeps the same child", async () => {
 test("a command that is missing is reported, not thrown", async () => {
   const keeper = createKeeper({ command: "/nonexistent/caffeinate", args: [] });
   keeper.hold();
-  await settle();
+  await waitFor(() => keeper.error() !== "");
   assert.equal(keeper.active(), false);
   assert.match(keeper.error(), /ENOENT|nonexistent/);
 });
@@ -42,7 +51,7 @@ test("a command that is missing is reported, not thrown", async () => {
 test("a child that exits at once is reported as an error", async () => {
   const keeper = createKeeper({ command: process.execPath, args: ["-e", "process.exit(3)"] });
   keeper.hold();
-  await settle();
+  await waitFor(() => keeper.error() !== "");
   assert.equal(keeper.active(), false);
   assert.match(keeper.error(), /exited with 3/);
 });
@@ -50,7 +59,7 @@ test("a child that exits at once is reported as an error", async () => {
 test("a release clears the error", async () => {
   const keeper = createKeeper({ command: "/nonexistent/caffeinate", args: [] });
   keeper.hold();
-  await settle();
+  await waitFor(() => keeper.error() !== "");
   keeper.release();
   assert.equal(keeper.error(), "");
 });
