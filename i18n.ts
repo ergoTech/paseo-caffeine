@@ -133,12 +133,43 @@ export function resolveLocale(tag: string): Locale {
   return "en";
 }
 
+/** The device's language: what the daemon-side title uses, and the fallback everywhere. */
 export function detectLocale(): Locale {
   try {
     return resolveLocale(new Intl.DateTimeFormat().resolvedOptions().locale);
   } catch {
     return "en";
   }
+}
+
+/**
+ * The language chosen in Paseo's own settings, when it can be read.
+ *
+ * The plugin SDK does not hand a surface the app's language, but on the desktop and the
+ * web the plugin runs in the same window as Paseo, whose settings live in localStorage as
+ * one JSON record carrying `language` and `theme`. The record is found by shape rather
+ * than by key, so a renamed key degrades to the device language instead of breaking.
+ * "system" means the device language; the phone has no localStorage and gets the same.
+ */
+export function detectAppLocale(): Locale {
+  try {
+    const storage = (globalThis as { localStorage?: Storage }).localStorage;
+    if (storage) {
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        const raw = key ? storage.getItem(key) : null;
+        if (!raw || raw[0] !== "{" || !raw.includes('"language"')) continue;
+        const parsed = JSON.parse(raw) as { language?: unknown; theme?: unknown };
+        if (typeof parsed.language !== "string" || !("theme" in parsed)) continue;
+        if (parsed.language === "system") break;
+        return resolveLocale(parsed.language);
+      }
+    }
+  } catch {
+    // Storage may be absent, blocked, or hold something that is not JSON; the device
+    // language is the right answer in every one of those cases.
+  }
+  return detectLocale();
 }
 
 export function t(locale: Locale = detectLocale()): Strings {

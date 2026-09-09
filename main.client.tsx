@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { type SetInput, type Status, getStatus, setMode } from "./caffeine.shared.ts";
-import { type Strings, detectLocale, formatRemaining, t } from "./i18n.ts";
+import { type Strings, detectAppLocale, formatRemaining, t } from "./i18n.ts";
 
 const QUERY_KEY = ["caffeine", "status"] as const;
 const TIMER_HOURS = [1, 3, 8] as const;
@@ -44,7 +44,7 @@ function Card({ theme, children, style }: { theme: PluginTheme; children: React.
   );
 }
 
-function StatusCard({ status, theme, strings, now }: { status: Status; theme: PluginTheme; strings: Strings; now: number }) {
+function StatusCard({ status, theme, strings, now, updatedAgo }: { status: Status; theme: PluginTheme; strings: Strings; now: number; updatedAgo: number | null }) {
   const awake = status.active;
   const colour = awake ? theme.colors.statusSuccess : theme.colors.foregroundMuted;
 
@@ -84,6 +84,10 @@ function StatusCard({ status, theme, strings, now }: { status: Status; theme: Pl
 
       {status.error ? (
         <Text style={{ color: theme.colors.statusDanger, fontSize: 13 }}>{`${strings.errorPrefix}: ${status.error}`}</Text>
+      ) : null}
+
+      {updatedAgo !== null ? (
+        <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11 }}>{strings.updated(updatedAgo)}</Text>
       ) : null}
     </Card>
   );
@@ -160,7 +164,7 @@ function Chip({ label, selected, theme, onPress }: { label: string; selected: bo
 }
 
 export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
-  const strings = t(detectLocale());
+  const strings = t(detectAppLocale());
   const now = useNow();
   const fetchStatus = useRpc(getStatus);
   const applyMode = useRpc(setMode);
@@ -212,7 +216,7 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
         <ActivityIndicator color={theme.colors.accent} />
       ) : (
         <>
-          <StatusCard status={data} theme={theme} strings={strings} now={now} />
+          <StatusCard status={data} theme={theme} strings={strings} now={now} updatedAgo={updatedAgo} />
 
           <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, fontWeight: "600", letterSpacing: 1, textTransform: "uppercase" }}>
             {strings.modeLabel}
@@ -279,11 +283,6 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
                 <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, flex: 1 }}>{line}</Text>
               </View>
             ))}
-            {updatedAgo !== null ? (
-              <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11, textAlign: "right", marginTop: 4 }}>
-                {strings.updated(updatedAgo)}
-              </Text>
-            ) : null}
           </Card>
         </>
       )}
