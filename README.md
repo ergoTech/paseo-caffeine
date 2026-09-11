@@ -48,9 +48,10 @@ has called anything, agents cannot be counted and the surface says it is waiting
 connecting client calls `caffeine.get` once for exactly this reason. Verified on the
 daemon: the object keeps answering long after the request that carried it.
 
-**Server code starts from `contribute()` behind a guard.** `contribute()` runs in both
-bundles; `process.versions.node` exists only on the daemon, so the controller starts
-there and the client bundle never touches a `*.server.ts` export.
+**The entry point is split, not guarded.** `index.server.ts` loads only on the daemon
+and `index.client.tsx` loads only in the app; `server/`, `client/` and `shared/` are
+compiler boundaries, so the controller starts unconditionally in `index.server.ts` with
+no runtime check for where it is running.
 
 **Command Center ids start with a letter.** `3h` was refused by the app with "Invalid
 Command Center item id", and one bad item takes the whole client contribution down with

@@ -1,9 +1,11 @@
-import type { PluginSurfaceProps, PluginTheme } from "@getpaseo/plugin";
-import { Icon, useRpc } from "@getpaseo/plugin";
+import type { PluginTheme } from "@getpaseo/plugin";
+import type { PluginSurfaceProps } from "@getpaseo/plugin/client";
+import { useRpc } from "@getpaseo/plugin/client";
+import { Icon } from "@getpaseo/plugin/client/react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
-import { type SetInput, type Status, getStatus, setMode } from "./caffeine.shared.ts";
+import { type SetInput, type Status, getStatus, setMode } from "../shared/caffeine.shared.ts";
 import { type Strings, detectAppLocale, formatRemaining, t } from "./i18n.ts";
 
 const QUERY_KEY = ["caffeine", "status"] as const;

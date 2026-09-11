@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import { mode } from "./caffeine.shared.ts";
+import { mode } from "../shared/caffeine.shared.ts";
 import { type Stored, defaultStored } from "./policy.ts";
 
 /**

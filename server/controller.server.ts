@@ -1,4 +1,4 @@
-import type { SetInput, Status } from "./caffeine.shared.ts";
+import type { SetInput, Status } from "../shared/caffeine.shared.ts";
 import type { Keeper } from "./keeper.server.ts";
 import { TICK_MS, type Stored, decide, defaultStored, nextBusyUntil, untilForHours } from "./policy.ts";
 

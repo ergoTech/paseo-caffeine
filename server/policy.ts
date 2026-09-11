@@ -1,4 +1,4 @@
-import type { Mode } from "./caffeine.shared.ts";
+import type { Mode } from "../shared/caffeine.shared.ts";
 
 /**
  * How long the machine stays awake after the last agent went quiet, and how long an
