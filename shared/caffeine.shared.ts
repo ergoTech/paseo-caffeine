@@ -37,6 +37,8 @@ export const status = z.object({
   tickAt: z.string().default(""),
   /** Whether the display is held awake along with the system. */
   keepDisplay: z.boolean().default(false),
+  /** Whether the settings card is kept off the surface, leaving it to the settings screen. */
+  hidden: z.boolean().default(false),
   battery: battery.nullable().default(null),
 });
 
@@ -47,11 +49,16 @@ export const setInput = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("timer"), minutes: timerMinutes }),
 ]);
 
-export const setDisplayInput = z.object({ keepDisplay: z.boolean() });
+/** A patch: whatever is left out keeps the value it already had. */
+export const setOptionsInput = z.object({
+  keepDisplay: z.boolean().optional(),
+  hidden: z.boolean().optional(),
+});
 
 export type Mode = z.output<typeof mode>;
 export type Status = z.output<typeof status>;
 export type SetInput = z.output<typeof setInput>;
+export type SetOptionsInput = z.output<typeof setOptionsInput>;
 export type Battery = z.output<typeof battery>;
 
 export const getStatus = defineRpc({
@@ -67,14 +74,14 @@ export const setMode = defineRpc({
 });
 
 /**
- * Separate from `setMode` on purpose: holding the display is orthogonal to the mode, and
- * folding it into that discriminated union would make every mode change carry the flag
- * from the client — and eventually drop it.
+ * Separate from `setMode` on purpose: both switches are orthogonal to the mode, and
+ * folding them into that discriminated union would make every mode change carry them
+ * from the client — and eventually drop one.
  */
-export const setDisplay = defineRpc({
+export const setOptions = defineRpc({
   // Lower case only: the SDK matches method names against /^[a-z][a-z0-9._-]*$/ and
   // throws on a capital, which takes the whole plugin down at import time.
-  name: "caffeine.set-display",
-  input: setDisplayInput,
+  name: "caffeine.set-options",
+  input: setOptionsInput,
   output: status,
 });

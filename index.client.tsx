@@ -1,12 +1,31 @@
+import type { PluginCleanup } from "@getpaseo/plugin";
 import type { PluginClientContext } from "@getpaseo/plugin/client";
-import { getStatus, setDisplay, setMode } from "./shared/caffeine.shared.ts";
+import { getStatus, setMode, setOptions } from "./shared/caffeine.shared.ts";
 import { detectLocale, t } from "./client/i18n.ts";
 import { CaffeineSurface } from "./client/main.client.tsx";
+import { onHiddenChange, reportHidden } from "./client/sidebar.ts";
 
 export default function contribute(client: PluginClientContext) {
   const strings = t(detectLocale());
   client.addSurface("main", CaffeineSurface);
-  client.addSidebarItem({ id: "main", title: strings.sidebarTitle, icon: "Coffee", surface: "main" });
+
+  // The whole page, a second time, under Settings. This is what makes hiding the sidebar
+  // entry safe: the switch that put it away is still reachable from the page itself.
+  client.addSettingsScreen({ id: "settings", title: strings.title, icon: "Coffee", Component: CaffeineSurface });
+
+  // The sidebar entry comes and goes with the switch. contribute() runs once and cannot
+  // wait for the daemon, so the entry is registered first and withdrawn a moment later if
+  // the stored answer says to.
+  const sidebarItem = { id: "main", title: strings.sidebarTitle, icon: "Coffee", surface: "main" };
+  let removeSidebarItem: PluginCleanup | null = client.addSidebarItem(sidebarItem);
+  const stopWatching = onHiddenChange((hidden) => {
+    if (hidden) {
+      void removeSidebarItem?.();
+      removeSidebarItem = null;
+    } else if (!removeSidebarItem) {
+      removeSidebarItem = client.addSidebarItem(sidebarItem);
+    }
+  });
 
   const commands = [
     { id: "off", title: "Caffeine: off", input: { mode: "off" } as const },
@@ -41,15 +60,20 @@ export default function contribute(client: PluginClientContext) {
       context: "global",
       keywords: ["caffeine", "display", "screen", "sleep"],
       async onSelect({ rpc }) {
-        await rpc(setDisplay, { keepDisplay: command.keepDisplay });
+        await rpc(setOptions, { keepDisplay: command.keepDisplay });
       },
     });
   }
 
   // Any connecting client calls caffeine.get once, which hands the daemon's API to the
   // probe. Without this, auto mode after a daemon restart would count nothing until
-  // somebody opened the surface.
-  void client.rpc(getStatus, {}).catch(() => undefined);
+  // somebody opened the surface. The same answer settles the sidebar entry.
+  void client
+    .rpc(getStatus, {})
+    .then((status) => reportHidden(status.hidden))
+    .catch(() => undefined);
 
-  return () => {};
+  return () => {
+    stopWatching();
+  };
 }

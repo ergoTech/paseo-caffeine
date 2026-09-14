@@ -1,4 +1,4 @@
-import type { Battery, SetInput, Status } from "../shared/caffeine.shared.ts";
+import type { Battery, SetInput, SetOptionsInput, Status } from "../shared/caffeine.shared.ts";
 import type { Keeper } from "./keeper.server.ts";
 import { TICK_MS, type Stored, decide, defaultStored, nextBusyUntil, untilForMinutes } from "./policy.ts";
 
@@ -19,7 +19,7 @@ export interface Controller {
   stop(): void;
   status(): Status;
   set(input: SetInput): Promise<Status>;
-  setDisplay(keepDisplay: boolean): Promise<Status>;
+  setOptions(patch: SetOptionsInput): Promise<Status>;
   tick(): Promise<Status>;
 }
 
@@ -52,6 +52,7 @@ export function createController(deps: ControllerDeps): Controller {
       error: deps.keeper.error(),
       tickAt,
       keepDisplay: stored.keepDisplay,
+      hidden: stored.hidden,
       battery,
     };
   }
@@ -108,8 +109,8 @@ export function createController(deps: ControllerDeps): Controller {
       // the machine the user is sitting at, not of why the Mac is being kept awake.
       const next: Stored =
         input.mode === "timer"
-          ? { mode: "timer", until: untilForMinutes(now(), input.minutes), keepDisplay: stored.keepDisplay }
-          : { mode: input.mode, until: "", keepDisplay: stored.keepDisplay };
+          ? { mode: "timer", until: untilForMinutes(now(), input.minutes), keepDisplay: stored.keepDisplay, hidden: stored.hidden }
+          : { mode: input.mode, until: "", keepDisplay: stored.keepDisplay, hidden: stored.hidden };
       // A different deadline or a different mode needs a child with different
       // arguments, so the old one goes first and reconcile() starts the right one.
       if (next.mode !== stored.mode || next.until !== stored.until) deps.keeper.release();
@@ -118,12 +119,17 @@ export function createController(deps: ControllerDeps): Controller {
       return reconcile();
     },
 
-    async setDisplay(keepDisplay) {
-      if (keepDisplay === stored.keepDisplay) return reconcile();
-      // caffeinate cannot be told to drop -d while it runs, and hold() will not touch a
-      // child that is already up, so the old one goes and reconcile() starts its replacement.
-      deps.keeper.release();
-      stored = { ...stored, keepDisplay };
+    async setOptions(patch) {
+      const next: Stored = {
+        ...stored,
+        keepDisplay: patch.keepDisplay ?? stored.keepDisplay,
+        hidden: patch.hidden ?? stored.hidden,
+      };
+      if (next.keepDisplay === stored.keepDisplay && next.hidden === stored.hidden) return reconcile();
+      // Only the display choice reaches caffeinate, and it cannot be told to drop -d while
+      // it runs — so that one restarts the child, and hiding the card touches nothing.
+      if (next.keepDisplay !== stored.keepDisplay) deps.keeper.release();
+      stored = next;
       await deps.write(stored);
       return reconcile();
     },

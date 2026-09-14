@@ -23,9 +23,10 @@ export interface Strings {
   autoDetail: string;
   hours(n: number): string;
   minutes(n: number): string;
-  displayTitle: string;
   displayLabel: string;
-  displayHint: string;
+  displayState(on: boolean): string;
+  hiddenLabel: string;
+  hiddenState(on: boolean): string;
   batteryCharged: string;
   batteryUntilFull(eta: string): string;
   batteryUntilEmpty(eta: string): string;
@@ -62,9 +63,10 @@ const en: Strings = {
   autoDetail: "releases three minutes after the last agent goes quiet",
   hours: (n) => `${n} h`,
   minutes: (n) => `${n} min`,
-  displayTitle: "Display",
-  displayLabel: "Keep the display on",
-  displayHint: "Adds -d to caffeinate: while the Mac is held awake, the screen stays lit too.",
+  displayLabel: "Keep display on",
+  displayState: (on) => (on ? "the screen stays lit" : "the screen sleeps"),
+  hiddenLabel: "Hide from sidebar",
+  hiddenState: (on) => (on ? "only in Settings" : "in the sidebar"),
   batteryCharged: "charged",
   batteryUntilFull: (eta) => `full in ${eta}`,
   batteryUntilEmpty: (eta) => `${eta} left`,
@@ -99,9 +101,10 @@ const ru: Strings = {
   autoDetail: "отпускает через три минуты после последнего агента",
   hours: (n) => `${n} ч`,
   minutes: (n) => `${n} мин`,
-  displayTitle: "Экран",
-  displayLabel: "Держать экран включённым",
-  displayHint: "Добавляет -d к caffeinate: пока Mac не спит, экран тоже не гаснет.",
+  displayLabel: "Не гасить экран",
+  displayState: (on) => (on ? "экран не гаснет" : "экран гаснет как обычно"),
+  hiddenLabel: "Скрыть из меню",
+  hiddenState: (on) => (on ? "только в настройках" : "в боковом меню"),
   batteryCharged: "заряжена",
   batteryUntilFull: (eta) => `полная через ${eta}`,
   batteryUntilEmpty: (eta) => `хватит на ${eta}`,
@@ -136,9 +139,10 @@ const uk: Strings = {
   autoDetail: "відпускає через три хвилини після останнього агента",
   hours: (n) => `${n} год`,
   minutes: (n) => `${n} хв`,
-  displayTitle: "Екран",
-  displayLabel: "Тримати екран увімкненим",
-  displayHint: "Додає -d до caffeinate: доки Mac не спить, екран теж не гасне.",
+  displayLabel: "Не гасити екран",
+  displayState: (on) => (on ? "екран не гасне" : "екран гасне як завжди"),
+  hiddenLabel: "Сховати з меню",
+  hiddenState: (on) => (on ? "тільки в налаштуваннях" : "у бічному меню"),
   batteryCharged: "заряджена",
   batteryUntilFull: (eta) => `повна через ${eta}`,
   batteryUntilEmpty: (eta) => `вистачить на ${eta}`,

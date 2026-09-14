@@ -53,7 +53,7 @@ function fakes(initial: Stored, running: () => number | null) {
 }
 
 test("start restores a stored 'on' and holds at once", async () => {
-  const f = fakes({ mode: "on", until: "", keepDisplay: false }, () => 0);
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, hidden: false }, () => 0);
   await f.controller.start();
   assert.equal(f.keeper.active(), true);
   assert.equal(f.controller.status().mode, "on");
@@ -62,7 +62,7 @@ test("start restores a stored 'on' and holds at once", async () => {
 });
 
 test("set timer writes the deadline and holds with it", async () => {
-  const f = fakes({ mode: "off", until: "", keepDisplay: false }, () => 0);
+  const f = fakes({ mode: "off", until: "", keepDisplay: false, hidden: false }, () => 0);
   await f.controller.start();
   const status = await f.controller.set({ mode: "timer", minutes: 180 });
   assert.equal(status.mode, "timer");
@@ -73,7 +73,7 @@ test("set timer writes the deadline and holds with it", async () => {
 });
 
 test("a tick past the deadline turns the timer off and releases", async () => {
-  const f = fakes({ mode: "timer", until: "2026-09-09T18:00:30.000Z", keepDisplay: false }, () => 0);
+  const f = fakes({ mode: "timer", until: "2026-09-09T18:00:30.000Z", keepDisplay: false, hidden: false }, () => 0);
   await f.controller.start();
   assert.equal(f.keeper.active(), true);
   f.advance(31_000);
@@ -86,7 +86,7 @@ test("a tick past the deadline turns the timer off and releases", async () => {
 
 test("auto holds while agents run and releases after the grace period", async () => {
   let running: number | null = 2;
-  const f = fakes({ mode: "auto", until: "", keepDisplay: false }, () => running);
+  const f = fakes({ mode: "auto", until: "", keepDisplay: false, hidden: false }, () => running);
   await f.controller.start();
   assert.equal(f.keeper.active(), true);
   assert.equal(f.controller.status().agents, 2);
@@ -101,7 +101,7 @@ test("auto holds while agents run and releases after the grace period", async ()
 });
 
 test("auto with no answer yet stays released and says so", async () => {
-  const f = fakes({ mode: "auto", until: "", keepDisplay: false }, () => null);
+  const f = fakes({ mode: "auto", until: "", keepDisplay: false, hidden: false }, () => null);
   await f.controller.start();
   assert.equal(f.keeper.active(), false);
   assert.equal(f.controller.status().busy, false);
@@ -110,17 +110,17 @@ test("auto with no answer yet stays released and says so", async () => {
 });
 
 test("set off releases and writes", async () => {
-  const f = fakes({ mode: "on", until: "", keepDisplay: false }, () => 0);
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, hidden: false }, () => 0);
   await f.controller.start();
   const status = await f.controller.set({ mode: "off" });
   assert.equal(status.active, false);
   assert.equal(f.keeper.active(), false);
-  assert.deepEqual(f.writes.at(-1), { mode: "off", until: "", keepDisplay: false });
+  assert.deepEqual(f.writes.at(-1), { mode: "off", until: "", keepDisplay: false, hidden: false });
   f.controller.stop();
 });
 
 test("switching on to timer restarts the child with a deadline", async () => {
-  const f = fakes({ mode: "on", until: "", keepDisplay: false }, () => 0);
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, hidden: false }, () => 0);
   await f.controller.start();
   assert.equal(f.held.at(-1), undefined);
   await f.controller.set({ mode: "timer", minutes: 60 });
@@ -129,40 +129,40 @@ test("switching on to timer restarts the child with a deadline", async () => {
 });
 
 test("the display switch reaches the child and is written down", async () => {
-  const f = fakes({ mode: "on", until: "", keepDisplay: false }, () => 0);
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, hidden: false }, () => 0);
   await f.controller.start();
   assert.equal(f.heldDisplay.at(-1), false);
 
-  const status = await f.controller.setDisplay(true);
+  const status = await f.controller.setOptions({ keepDisplay: true });
   assert.equal(status.keepDisplay, true);
   assert.equal(f.heldDisplay.at(-1), true);
-  assert.deepEqual(f.writes.at(-1), { mode: "on", until: "", keepDisplay: true });
+  assert.deepEqual(f.writes.at(-1), { mode: "on", until: "", keepDisplay: true, hidden: false });
   f.controller.stop();
 });
 
 test("changing the display choice restarts the child, because caffeinate cannot be retold", async () => {
-  const f = fakes({ mode: "on", until: "", keepDisplay: false }, () => 0);
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, hidden: false }, () => 0);
   await f.controller.start();
   const before = f.releaseCount();
-  await f.controller.setDisplay(true);
+  await f.controller.setOptions({ keepDisplay: true });
   assert.equal(f.releaseCount(), before + 1);
   assert.equal(f.keeper.active(), true);
   f.controller.stop();
 });
 
 test("setting the display to what it already is neither writes nor restarts", async () => {
-  const f = fakes({ mode: "on", until: "", keepDisplay: true }, () => 0);
+  const f = fakes({ mode: "on", until: "", keepDisplay: true, hidden: false }, () => 0);
   await f.controller.start();
   const writes = f.writes.length;
   const releases = f.releaseCount();
-  await f.controller.setDisplay(true);
+  await f.controller.setOptions({ keepDisplay: true });
   assert.equal(f.writes.length, writes);
   assert.equal(f.releaseCount(), releases);
   f.controller.stop();
 });
 
 test("a mode change carries the display choice with it", async () => {
-  const f = fakes({ mode: "on", until: "", keepDisplay: true }, () => 0);
+  const f = fakes({ mode: "on", until: "", keepDisplay: true, hidden: false }, () => 0);
   await f.controller.start();
   await f.controller.set({ mode: "timer", minutes: 60 });
   assert.equal(f.stored.keepDisplay, true);
@@ -171,10 +171,10 @@ test("a mode change carries the display choice with it", async () => {
 });
 
 test("the battery is read once a tick and reaches the status", async () => {
-  const f = fakes({ mode: "off", until: "", keepDisplay: false }, () => 0);
+  const f = fakes({ mode: "off", until: "", keepDisplay: false, hidden: false }, () => 0);
   let reads = 0;
   const controller = createController({
-    read: async () => ({ mode: "off", until: "", keepDisplay: false }),
+    read: async () => ({ mode: "off", until: "", keepDisplay: false, hidden: false }),
     write: async () => undefined,
     keeper: f.keeper,
     runningCount: async () => 0,
@@ -193,17 +193,52 @@ test("the battery is read once a tick and reaches the status", async () => {
 });
 
 test("a controller with no battery probe simply has none", async () => {
-  const f = fakes({ mode: "off", until: "", keepDisplay: false }, () => 0);
+  const f = fakes({ mode: "off", until: "", keepDisplay: false, hidden: false }, () => 0);
   await f.controller.start();
   assert.equal(f.controller.status().battery, null);
   f.controller.stop();
 });
 
 test("a half-hour timer lands thirty minutes out", async () => {
-  const f = fakes({ mode: "off", until: "", keepDisplay: false }, () => 0);
+  const f = fakes({ mode: "off", until: "", keepDisplay: false, hidden: false }, () => 0);
   await f.controller.start();
   const status = await f.controller.set({ mode: "timer", minutes: 30 });
   assert.equal(status.until, "2026-09-09T18:30:00.000Z");
   assert.equal(f.held.at(-1), Date.parse("2026-09-09T18:30:00.000Z"));
+  f.controller.stop();
+});
+
+test("hiding the card is written down and does not touch caffeinate", async () => {
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, hidden: false }, () => 0);
+  await f.controller.start();
+  const releases = f.releaseCount();
+
+  const status = await f.controller.setOptions({ hidden: true });
+  assert.equal(status.hidden, true);
+  assert.deepEqual(f.writes.at(-1), { mode: "on", until: "", keepDisplay: false, hidden: true });
+  // Only the display choice reaches the child; hiding a card is not its business.
+  assert.equal(f.releaseCount(), releases);
+  assert.equal(f.keeper.active(), true);
+  f.controller.stop();
+});
+
+test("a patch leaves out what it does not mention", async () => {
+  const f = fakes({ mode: "on", until: "", keepDisplay: true, hidden: false }, () => 0);
+  await f.controller.start();
+  await f.controller.setOptions({ hidden: true });
+  assert.equal(f.stored.keepDisplay, true);
+  await f.controller.setOptions({ keepDisplay: false });
+  assert.equal(f.stored.hidden, true);
+  f.controller.stop();
+});
+
+test("a spent timer forgets neither switch", async () => {
+  const f = fakes({ mode: "timer", until: "2026-09-09T18:30:00.000Z", keepDisplay: true, hidden: true }, () => 0);
+  await f.controller.start();
+  f.advance(31 * 60_000);
+  const status = await f.controller.tick();
+  assert.equal(status.mode, "off");
+  assert.equal(status.keepDisplay, true);
+  assert.equal(status.hidden, true);
   f.controller.stop();
 });

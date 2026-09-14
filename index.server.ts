@@ -1,5 +1,5 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
-import { getStatus, setDisplay, setMode } from "./shared/caffeine.shared.ts";
+import { getStatus, setMode, setOptions } from "./shared/caffeine.shared.ts";
 import { createAgentsProbe } from "./server/agents.server.ts";
 import { createBatteryProbe } from "./server/battery.server.ts";
 import { type Controller, createController } from "./server/controller.server.ts";
@@ -43,10 +43,10 @@ export default function contribute(server: PluginServerContext) {
     return instance.set(input);
   });
 
-  server.handle(setDisplay, async (input, { paseo }) => {
+  server.handle(setOptions, async (input, { paseo }) => {
     probe.remember(paseo);
     const instance = await startedServer();
-    return instance.setDisplay(input.keepDisplay);
+    return instance.setOptions(input);
   });
 
   return () => {

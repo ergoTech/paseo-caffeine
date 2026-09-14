@@ -2,12 +2,12 @@ import type { PluginTheme } from "@getpaseo/plugin";
 import type { PluginSurfaceProps } from "@getpaseo/plugin/client";
 import { useRpc } from "@getpaseo/plugin/client";
 import { Icon } from "@getpaseo/plugin/client/react-native";
-import { SettingsSwitch } from "@getpaseo/plugin/client/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
-import { type Battery, type SetInput, type Status, getStatus, setDisplay, setMode } from "../shared/caffeine.shared.ts";
+import { type Battery, type SetInput, type SetOptionsInput, type Status, getStatus, setMode, setOptions } from "../shared/caffeine.shared.ts";
 import { type Strings, detectAppLocale, formatRemaining, t } from "./i18n.ts";
+import { reportHidden } from "./sidebar.ts";
 
 const QUERY_KEY = ["caffeine", "status"] as const;
 const TIMER_MINUTES = [30, 60, 120, 180, 480, 720] as const;
@@ -239,7 +239,8 @@ function ModeCard({
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <Icon name={icon} size={16} color={selected ? theme.colors.accent : theme.colors.foregroundMuted} />
-        <Text style={{ color: theme.colors.foreground, fontSize: 15, fontWeight: "600" }}>{title}</Text>
+        {/* flex so a title too long for the tile wraps inside it instead of over the border. */}
+        <Text style={{ color: theme.colors.foreground, fontSize: 15, fontWeight: "600", flex: 1 }}>{title}</Text>
       </View>
       {/* No line limit: a clipped "…after the last agent goe…" reads worse than a third line. */}
       <Text style={{ color: theme.colors.foregroundMuted, fontSize: 13 }}>{detail}</Text>
@@ -279,7 +280,7 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
   const now = useNow();
   const fetchStatus = useRpc(getStatus);
   const applyMode = useRpc(setMode);
-  const applyDisplay = useRpc(setDisplay);
+  const applyOptions = useRpc(setOptions);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -295,10 +296,16 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
     onSuccess: (status) => queryClient.setQueryData(QUERY_KEY, status),
   });
 
-  const changeDisplay = useMutation({
-    mutationFn: (keepDisplay: boolean) => applyDisplay({ keepDisplay }),
+  const changeOptions = useMutation({
+    mutationFn: (patch: SetOptionsInput) => applyOptions(patch),
     onSuccess: (status) => queryClient.setQueryData(QUERY_KEY, status),
   });
+
+  // contribute() cannot poll, so the surface passes the switch along as it learns it.
+  const hidden = data?.hidden;
+  useEffect(() => {
+    if (hidden !== undefined) reportHidden(hidden);
+  }, [hidden]);
 
   const compact = layout.compact;
   const m = compact ? METRICS.compact : METRICS.roomy;
@@ -395,15 +402,29 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
             </View>
           </ModeCard>
 
-          <Card theme={theme} pad={6}>
-            <SettingsSwitch
-              label={strings.displayLabel}
-              hint={strings.displayHint}
-              value={data.keepDisplay}
-              onValueChange={(next) => changeDisplay.mutate(next)}
-              disabled={changeDisplay.isPending}
+          {/* Tiles rather than SettingsSwitch rows: in half a phone's width the host's switch
+              wraps its label, wraps its hint, and drops the toggle onto a line of its own. These
+              are the same tiles as the modes, and being on is shown the same way — by the border. */}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: m.gap }}>
+            <ModeCard
+              icon={data.keepDisplay ? "Monitor" : "MonitorOff"}
+              title={strings.displayLabel}
+              detail={strings.displayState(data.keepDisplay)}
+              selected={data.keepDisplay}
+              theme={theme}
+              tile={m.tile}
+              onPress={() => changeOptions.mutate({ keepDisplay: !data.keepDisplay })}
             />
-          </Card>
+            <ModeCard
+              icon={data.hidden ? "EyeOff" : "Eye"}
+              title={strings.hiddenLabel}
+              detail={strings.hiddenState(data.hidden)}
+              selected={data.hidden}
+              theme={theme}
+              tile={m.tile}
+              onPress={() => changeOptions.mutate({ hidden: !data.hidden })}
+            />
+          </View>
         </>
       )}
     </ScrollView>
