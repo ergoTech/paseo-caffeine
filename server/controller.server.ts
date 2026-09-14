@@ -1,12 +1,14 @@
-import type { SetInput, Status } from "../shared/caffeine.shared.ts";
+import type { Battery, SetInput, Status } from "../shared/caffeine.shared.ts";
 import type { Keeper } from "./keeper.server.ts";
-import { TICK_MS, type Stored, decide, defaultStored, nextBusyUntil, untilForHours } from "./policy.ts";
+import { TICK_MS, type Stored, decide, defaultStored, nextBusyUntil, untilForMinutes } from "./policy.ts";
 
 export interface ControllerDeps {
   read(): Promise<Stored>;
   write(stored: Stored): Promise<void>;
   keeper: Keeper;
   runningCount(): Promise<number | null>;
+  /** The battery, read once per tick; null on a machine that has none. */
+  readBattery?(): Promise<Battery | null>;
   now?: () => number;
   tickMs?: number;
   log?: (line: string) => void;
@@ -17,6 +19,7 @@ export interface Controller {
   stop(): void;
   status(): Status;
   set(input: SetInput): Promise<Status>;
+  setDisplay(keepDisplay: boolean): Promise<Status>;
   tick(): Promise<Status>;
 }
 
@@ -33,6 +36,7 @@ export function createController(deps: ControllerDeps): Controller {
   let stored: Stored = defaultStored();
   let busyUntil = 0;
   let agents = 0;
+  let battery: Battery | null = null;
   let lastReason = "";
   let tickAt = "";
   let timer: ReturnType<typeof setInterval> | null = null;
@@ -47,6 +51,8 @@ export function createController(deps: ControllerDeps): Controller {
       agents,
       error: deps.keeper.error(),
       tickAt,
+      keepDisplay: stored.keepDisplay,
+      battery,
     };
   }
 
@@ -54,6 +60,9 @@ export function createController(deps: ControllerDeps): Controller {
     const nowMs = now();
     const running = await deps.runningCount();
     agents = running ?? 0;
+    // The battery has no say in whether the Mac stays awake; it is read here only
+    // because this is the one place that already runs on a timer.
+    if (deps.readBattery) battery = await deps.readBattery();
     busyUntil = nextBusyUntil(busyUntil, running, nowMs);
 
     const decision = decide(stored, nowMs, busyUntil);
@@ -63,7 +72,7 @@ export function createController(deps: ControllerDeps): Controller {
     }
 
     if (decision.active) {
-      deps.keeper.hold(stored.mode === "timer" ? Date.parse(stored.until) : undefined);
+      deps.keeper.hold(stored.mode === "timer" ? Date.parse(stored.until) : undefined, stored.keepDisplay);
     } else {
       deps.keeper.release();
     }
@@ -95,14 +104,26 @@ export function createController(deps: ControllerDeps): Controller {
     status: snapshot,
 
     async set(input) {
+      // The display choice rides through a mode change untouched: it is a property of
+      // the machine the user is sitting at, not of why the Mac is being kept awake.
       const next: Stored =
         input.mode === "timer"
-          ? { mode: "timer", until: untilForHours(now(), input.hours) }
-          : { mode: input.mode, until: "" };
+          ? { mode: "timer", until: untilForMinutes(now(), input.minutes), keepDisplay: stored.keepDisplay }
+          : { mode: input.mode, until: "", keepDisplay: stored.keepDisplay };
       // A different deadline or a different mode needs a child with different
       // arguments, so the old one goes first and reconcile() starts the right one.
       if (next.mode !== stored.mode || next.until !== stored.until) deps.keeper.release();
       stored = next;
+      await deps.write(stored);
+      return reconcile();
+    },
+
+    async setDisplay(keepDisplay) {
+      if (keepDisplay === stored.keepDisplay) return reconcile();
+      // caffeinate cannot be told to drop -d while it runs, and hold() will not touch a
+      // child that is already up, so the old one goes and reconcile() starts its replacement.
+      deps.keeper.release();
+      stored = { ...stored, keepDisplay };
       await deps.write(stored);
       return reconcile();
     },

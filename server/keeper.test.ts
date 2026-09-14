@@ -78,3 +78,36 @@ test("timer holds pass the remaining seconds to the command", async () => {
   keeper.hold(1_000_000 + 90_500);
   assert.deepEqual(seen[0]?.slice(-2), ["-t", "91"]);
 });
+
+/** The real argument list, without letting a real caffeinate anywhere near the test. */
+function recordedArgs(hold: (keeper: ReturnType<typeof createKeeper>) => void): string[] {
+  const seen: string[][] = [];
+  const keeper = createKeeper({
+    command: "/usr/bin/caffeinate",
+    now: () => 1_000_000,
+    spawn: (command, args) => {
+      seen.push([command, ...args]);
+      return { pid: 42, kill: () => true, on: () => undefined } as never;
+    },
+  });
+  hold(keeper);
+  return seen[0] ?? [];
+}
+
+test("the display is left to sleep unless asked for", () => {
+  const args = recordedArgs((keeper) => keeper.hold());
+  assert.deepEqual(args.slice(1, 3), ["-i", "-s"]);
+  assert.equal(args.includes("-d"), false);
+});
+
+test("keeping the display adds -d", () => {
+  const args = recordedArgs((keeper) => keeper.hold(undefined, true));
+  assert.equal(args.includes("-d"), true);
+  assert.equal(args.includes("-i"), true);
+});
+
+test("a timer and the display can be held together", () => {
+  const args = recordedArgs((keeper) => keeper.hold(1_000_000 + 60_000, true));
+  assert.equal(args.includes("-d"), true);
+  assert.deepEqual(args.slice(-2), ["-t", "60"]);
+});

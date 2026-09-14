@@ -15,6 +15,8 @@ export interface Stored {
   mode: Mode;
   /** RFC 3339 deadline in timer mode, empty otherwise. */
   until: string;
+  /** Hold the display awake too, rather than letting it sleep under a waking system. */
+  keepDisplay: boolean;
 }
 
 export interface Decision {
@@ -25,11 +27,11 @@ export interface Decision {
 }
 
 export function defaultStored(): Stored {
-  return { mode: "off", until: "" };
+  return { mode: "off", until: "", keepDisplay: false };
 }
 
-export function untilForHours(nowMs: number, hours: number): string {
-  return new Date(nowMs + hours * 3_600_000).toISOString();
+export function untilForMinutes(nowMs: number, minutes: number): string {
+  return new Date(nowMs + minutes * 60_000).toISOString();
 }
 
 /**
@@ -39,6 +41,11 @@ export function untilForHours(nowMs: number, hours: number): string {
  */
 export function nextBusyUntil(previousMs: number, running: number | null, nowMs: number): number {
   return running !== null && running > 0 ? nowMs + GRACE_MS : previousMs;
+}
+
+/** Off, but still remembering whether the display should be held. */
+function offKeeping(stored: Stored): Stored {
+  return { ...defaultStored(), keepDisplay: stored.keepDisplay };
 }
 
 export function decide(stored: Stored, nowMs: number, busyUntilMs: number): Decision {
@@ -54,10 +61,10 @@ export function decide(stored: Stored, nowMs: number, busyUntilMs: number): Deci
     case "timer": {
       const deadline = Date.parse(stored.until);
       if (Number.isNaN(deadline)) {
-        return { active: false, stored: defaultStored(), reason: "timer deadline unreadable; turned off" };
+        return { active: false, stored: offKeeping(stored), reason: "timer deadline unreadable; turned off" };
       }
       if (nowMs >= deadline) {
-        return { active: false, stored: defaultStored(), reason: "timer expired; turned off" };
+        return { active: false, stored: offKeeping(stored), reason: "timer expired; turned off" };
       }
       return { active: true, stored, reason: "timer running" };
     }

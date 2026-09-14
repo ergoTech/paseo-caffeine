@@ -10,11 +10,15 @@ gives Paseo the same lever with three positions:
 | | |
 |---|---|
 | **On** | The Mac does not sleep until you say otherwise. Survives a daemon restart. |
-| **1 h / 3 h / 8 h** | The Mac does not sleep until the deadline, then the switch goes back to Off by itself. |
+| **30 min … 12 h** | The Mac does not sleep until the deadline, then the switch goes back to Off by itself. Six lengths: 30 min, 1 h, 2 h, 3 h, 8 h, 12 h. |
 | **While agents work** | The Mac does not sleep while at least one Paseo agent on this host is running, and for three minutes after the last one went quiet. |
 
-Only system sleep is held; the display sleeps as usual. A closed lid still sleeps a
-MacBook, `caffeinate` or not.
+Only system sleep is held and the display sleeps as usual — unless **Keep the display
+on** is switched on, which holds both. A closed lid still sleeps a MacBook, `caffeinate`
+or not.
+
+The surface also shows the Mac's own battery: charge, whether the charger is in, and how
+long the charge has left — or how long until it is full.
 
 ## Installing it
 
@@ -30,9 +34,19 @@ Then **Caffeine** in the sidebar, or ⌘K and type "caffeine".
 
 The server half runs `caffeinate -i -s -w <its own pid>` as a child process while the
 policy says so, and re-evaluates every thirty seconds: it asks the daemon how many agents
-are running, moves a busy window, and starts or stops the child. `-w` ties the child to
-the plugin, so a plugin killed without cleanup takes its `caffeinate` down with it. Timer
-holds add `-t` as a second guard.
+are running, reads the battery, moves a busy window, and starts or stops the child. `-w`
+ties the child to the plugin, so a plugin killed without cleanup takes its `caffeinate`
+down with it. Timer holds add `-t` as a second guard, and **Keep the display on** adds
+`-d`.
+
+The display switch is its own RPC rather than a field on the mode, because the two are
+orthogonal: the mode says why the Mac is being held awake, the switch says whether the
+screen goes with it. It survives a mode change and a spent timer.
+
+The battery comes from `pmset -g batt`, parsed rather than computed — `0:00 remaining`
+next to `charged` means "not applicable", and `(no estimate)` means pmset is still
+working it out. Both read as no estimate rather than as no time left. A machine without
+a battery simply has no card.
 
 The mode lives in `~/.jobby-jobs/caffeine.json` — a fixed path, because a plugin cannot
 find its own directory.
@@ -53,6 +67,16 @@ and `index.client.tsx` loads only in the app; `server/`, `client/` and `shared/`
 compiler boundaries, so the controller starts unconditionally in `index.server.ts` with
 no runtime check for where it is running.
 
+**The timer is set in minutes, not hours.** Half an hour is the shortest useful hold and
+does not fit a whole-hour union, so `setMode` takes `minutes` and the chips render
+themselves through the same `formatRemaining` the countdown uses — 30 becomes "30 min",
+60 becomes "1 h", with no extra strings in any locale.
+
+**RPC method names are lower case.** The SDK matches them against
+`/^[a-z][a-z0-9._-]*$/` and throws `Invalid plugin RPC method` on a capital, at import
+time, which takes the whole plugin with it. `caffeine.setDisplay` was refused;
+`caffeine.set-display` is the same idea spelled the way the SDK wants.
+
 **Command Center ids start with a letter.** `3h` was refused by the app with "Invalid
 Command Center item id", and one bad item takes the whole client contribution down with
 it — sidebar entry included — while `paseo plugin ls` still says `running`. The message
@@ -61,3 +85,7 @@ appears only in the desktop app's own log, `~/Library/Logs/Paseo/main.log`.
 **Tests run the TypeScript sources directly** under `node --test`, which is why relative
 imports carry their `.ts` extension and type imports say `import type`. The bundler is
 happy either way; Node is not.
+
+**A controller started in a test has to be stopped in it.** `start()` opens an interval,
+and `node --test` waits on the handle: one forgotten `stop()` turns a 100 ms file into a
+run that only ends when the timeout does.

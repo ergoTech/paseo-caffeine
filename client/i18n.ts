@@ -4,7 +4,7 @@ export interface Strings {
   sidebarTitle: string;
   title: string;
   tagline: string;
-  taglineDetail: string;
+  taglineDetail(keepDisplay: boolean): string;
   stateAwake: string;
   stateAsleep: string;
   remaining(remaining: string): string;
@@ -23,10 +23,15 @@ export interface Strings {
   autoDetail: string;
   hours(n: number): string;
   minutes(n: number): string;
-  howTitle: string;
-  how1: string;
-  how2: string;
-  how3: string;
+  displayTitle: string;
+  displayLabel: string;
+  displayHint: string;
+  batteryCharged: string;
+  batteryUntilFull(eta: string): string;
+  batteryUntilEmpty(eta: string): string;
+  batteryNoEstimate: string;
+  powerAC: string;
+  powerBattery: string;
   updated(secondsAgo: number): string;
   errorPrefix: string;
 }
@@ -35,7 +40,10 @@ const en: Strings = {
   sidebarTitle: "Caffeine",
   title: "Caffeine",
   tagline: "Keeps the Mac awake for your agents.",
-  taglineDetail: "Only system sleep is held; the display goes dark as usual.",
+  taglineDetail: (keepDisplay) =>
+    keepDisplay
+      ? "System sleep and the display are both held."
+      : "Only system sleep is held; the display goes dark as usual.",
   stateAwake: "AWAKE",
   stateAsleep: "SLEEPS AS USUAL",
   remaining: (remaining) => `${remaining} left`,
@@ -54,10 +62,15 @@ const en: Strings = {
   autoDetail: "releases three minutes after the last agent goes quiet",
   hours: (n) => `${n} h`,
   minutes: (n) => `${n} min`,
-  howTitle: "How it works",
-  how1: "Runs caffeinate -i -s tied to this plugin's process, so it can never be orphaned.",
-  how2: "The mode survives a daemon restart; a timer expires within thirty seconds of its deadline.",
-  how3: "A closed lid still puts a MacBook to sleep, caffeinate or not.",
+  displayTitle: "Display",
+  displayLabel: "Keep the display on",
+  displayHint: "Adds -d to caffeinate: while the Mac is held awake, the screen stays lit too.",
+  batteryCharged: "charged",
+  batteryUntilFull: (eta) => `full in ${eta}`,
+  batteryUntilEmpty: (eta) => `${eta} left`,
+  batteryNoEstimate: "working out the estimate",
+  powerAC: "on the charger",
+  powerBattery: "on battery",
   updated: (s) => (s < 5 ? "updated just now" : `updated ${s} s ago`),
   errorPrefix: "caffeinate failed",
 };
@@ -66,7 +79,8 @@ const ru: Strings = {
   sidebarTitle: "Кофеин",
   title: "Кофеин",
   tagline: "Не даёт Mac уснуть, пока работают агенты.",
-  taglineDetail: "Только сон системы: экран гаснет как обычно.",
+  taglineDetail: (keepDisplay) =>
+    keepDisplay ? "Держим и систему, и экран." : "Только сон системы: экран гаснет как обычно.",
   stateAwake: "НЕ СПИТ",
   stateAsleep: "СПИТ КАК ОБЫЧНО",
   remaining: (remaining) => `осталось ${remaining}`,
@@ -85,10 +99,15 @@ const ru: Strings = {
   autoDetail: "отпускает через три минуты после последнего агента",
   hours: (n) => `${n} ч`,
   minutes: (n) => `${n} мин`,
-  howTitle: "Как это работает",
-  how1: "Держит caffeinate -i -s, привязанный к процессу плагина, так что сирот не остаётся.",
-  how2: "Режим переживает перезапуск демона; таймер гаснет в пределах тридцати секунд от срока.",
-  how3: "Закрытая крышка всё равно усыпляет MacBook, с caffeinate или без.",
+  displayTitle: "Экран",
+  displayLabel: "Держать экран включённым",
+  displayHint: "Добавляет -d к caffeinate: пока Mac не спит, экран тоже не гаснет.",
+  batteryCharged: "заряжена",
+  batteryUntilFull: (eta) => `полная через ${eta}`,
+  batteryUntilEmpty: (eta) => `хватит на ${eta}`,
+  batteryNoEstimate: "считает оценку",
+  powerAC: "от сети",
+  powerBattery: "от батареи",
   updated: (s) => (s < 5 ? "обновлено только что" : `обновлено ${s} с назад`),
   errorPrefix: "caffeinate не запустился",
 };
@@ -97,7 +116,8 @@ const uk: Strings = {
   sidebarTitle: "Кофеїн",
   title: "Кофеїн",
   tagline: "Не дає Mac заснути, доки працюють агенти.",
-  taglineDetail: "Лише сон системи: екран гасне як зазвичай.",
+  taglineDetail: (keepDisplay) =>
+    keepDisplay ? "Тримаємо і систему, і екран." : "Лише сон системи: екран гасне як зазвичай.",
   stateAwake: "НЕ СПИТЬ",
   stateAsleep: "СПИТЬ ЯК ЗАЗВИЧАЙ",
   remaining: (remaining) => `залишилось ${remaining}`,
@@ -116,10 +136,15 @@ const uk: Strings = {
   autoDetail: "відпускає через три хвилини після останнього агента",
   hours: (n) => `${n} год`,
   minutes: (n) => `${n} хв`,
-  howTitle: "Як це працює",
-  how1: "Тримає caffeinate -i -s, прив'язаний до процесу плагіна, тож сиріт не лишається.",
-  how2: "Режим переживає перезапуск демона; таймер гасне в межах тридцяти секунд від строку.",
-  how3: "Закрита кришка все одно присипляє MacBook, з caffeinate чи без.",
+  displayTitle: "Екран",
+  displayLabel: "Тримати екран увімкненим",
+  displayHint: "Додає -d до caffeinate: доки Mac не спить, екран теж не гасне.",
+  batteryCharged: "заряджена",
+  batteryUntilFull: (eta) => `повна через ${eta}`,
+  batteryUntilEmpty: (eta) => `вистачить на ${eta}`,
+  batteryNoEstimate: "рахує оцінку",
+  powerAC: "від мережі",
+  powerBattery: "від батареї",
   updated: (s) => (s < 5 ? "оновлено щойно" : `оновлено ${s} с тому`),
   errorPrefix: "caffeinate не запустився",
 };

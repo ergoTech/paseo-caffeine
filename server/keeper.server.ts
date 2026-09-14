@@ -5,8 +5,12 @@ export interface Keeper {
   /** The last failure to start or stay running, or "" while all is well. */
   error(): string;
   pid(): number | null;
-  /** Starts the child unless one is running. `untilMs` adds `-t` as a second guard. */
-  hold(untilMs?: number): void;
+  /**
+   * Starts the child unless one is running. `untilMs` adds `-t` as a second guard, and
+   * `keepDisplay` adds `-d`. A running child is left alone, so changing either of these
+   * means release() first — the caller decides that, because only it knows what changed.
+   */
+  hold(untilMs?: number, keepDisplay?: boolean): void;
   release(): void;
 }
 
@@ -28,6 +32,9 @@ export interface KeeperOptions {
  * are what Orca runs. `-w` ties the child to the plugin process, so if the daemon kills
  * this plugin without giving it a chance to clean up, caffeinate notices the parent is
  * gone and exits by itself instead of holding the Mac awake for good.
+ *
+ * `-d` is deliberately not in here: holding the display is the one thing this plugin
+ * does not do by default, and it is added per hold() when the switch asks for it.
  */
 const DEFAULT_ARGS = ["-i", "-s"] as const;
 
@@ -47,9 +54,10 @@ export function createKeeper(options: KeeperOptions = {}): Keeper {
     error: () => lastError,
     pid: () => child?.pid ?? null,
 
-    hold(untilMs) {
+    hold(untilMs, keepDisplay = false) {
       if (child) return;
       const args = [...baseArgs];
+      if (keepDisplay) args.push("-d");
       // Only the real caffeinate understands -w; a test's stand-in command gets its own args.
       if (options.args === undefined) args.push("-w", String(guardPid));
       if (untilMs !== undefined) {

@@ -1,6 +1,7 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
-import { getStatus, setMode } from "./shared/caffeine.shared.ts";
+import { getStatus, setDisplay, setMode } from "./shared/caffeine.shared.ts";
 import { createAgentsProbe } from "./server/agents.server.ts";
+import { createBatteryProbe } from "./server/battery.server.ts";
 import { type Controller, createController } from "./server/controller.server.ts";
 import { createKeeper } from "./server/keeper.server.ts";
 import { readStored, writeStored } from "./server/state.server.ts";
@@ -10,11 +11,13 @@ export default function contribute(server: PluginServerContext) {
   // unconditionally, right here — no isServer() guard, no lazy construction to dodge a
   // client bundle that no longer exists for this module.
   const probe = createAgentsProbe();
+  const power = createBatteryProbe();
   const controller: Controller = createController({
     read: () => readStored(),
     write: (stored) => writeStored(stored),
     keeper: createKeeper(),
     runningCount: () => probe.runningCount(),
+    readBattery: () => power.read(),
     log: (line) => console.log(line),
   });
 
@@ -38,6 +41,12 @@ export default function contribute(server: PluginServerContext) {
     probe.remember(paseo);
     const instance = await startedServer();
     return instance.set(input);
+  });
+
+  server.handle(setDisplay, async (input, { paseo }) => {
+    probe.remember(paseo);
+    const instance = await startedServer();
+    return instance.setDisplay(input.keepDisplay);
   });
 
   return () => {

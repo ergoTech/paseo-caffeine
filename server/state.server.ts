@@ -12,7 +12,9 @@ import { type Stored, defaultStored } from "./policy.ts";
  */
 export const STATE_FILE = join(homedir(), ".jobby-jobs", "caffeine.json");
 
-const stored = z.object({ mode, until: z.string().default("") });
+// keepDisplay defaults rather than being required, so a file written before the display
+// switch existed reads back as "let the screen sleep" instead of as malformed.
+const stored = z.object({ mode, until: z.string().default(""), keepDisplay: z.boolean().default(false) });
 
 /** Absent, unreadable, malformed and unknown all mean the same thing: off. */
 export async function readStored(path: string = STATE_FILE): Promise<Stored> {
