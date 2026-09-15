@@ -377,30 +377,37 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
             />
           </View>
 
-          {/* A row each: one has a sentence to finish, the other six chips to lay out. */}
-          <ModeCard
-            icon="Zap"
-            title={strings.auto}
-            detail={strings.autoDetail}
-            selected={data.mode === "auto"}
-            theme={theme}
-            tile="100%"
-            onPress={() => change.mutate({ mode: "auto" })}
-          />
+          {/* A row each: one has a sentence to finish, the other six chips to lay out.
+              The row is what makes tile="100%" mean a width. ModeCard's flexBasis resolves
+              against its parent's main axis, and the content container's runs down the page,
+              so a card left as a direct child there is stretched to the full scroll height. */}
+          <View style={{ flexDirection: "row" }}>
+            <ModeCard
+              icon="Zap"
+              title={strings.auto}
+              detail={strings.autoDetail}
+              selected={data.mode === "auto"}
+              theme={theme}
+              tile="100%"
+              onPress={() => change.mutate({ mode: "auto" })}
+            />
+          </View>
 
-          <ModeCard icon="Timer" title={strings.timer} detail={strings.timerDetail} selected={data.mode === "timer"} theme={theme} tile="100%">
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
-              {TIMER_MINUTES.map((minutes) => (
-                <Chip
-                  key={minutes}
-                  label={formatRemaining(minutes * 60_000, strings)}
-                  selected={timerMinutes === minutes}
-                  theme={theme}
-                  onPress={() => change.mutate({ mode: "timer", minutes })}
-                />
-              ))}
-            </View>
-          </ModeCard>
+          <View style={{ flexDirection: "row" }}>
+            <ModeCard icon="Timer" title={strings.timer} detail={strings.timerDetail} selected={data.mode === "timer"} theme={theme} tile="100%">
+              <View style={{ flexDirection: "row", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+                {TIMER_MINUTES.map((minutes) => (
+                  <Chip
+                    key={minutes}
+                    label={formatRemaining(minutes * 60_000, strings)}
+                    selected={timerMinutes === minutes}
+                    theme={theme}
+                    onPress={() => change.mutate({ mode: "timer", minutes })}
+                  />
+                ))}
+              </View>
+            </ModeCard>
+          </View>
 
           {/* Tiles rather than SettingsSwitch rows: in half a phone's width the host's switch
               wraps its label, wraps its hint, and drops the toggle onto a line of its own. These
