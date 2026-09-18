@@ -35,6 +35,14 @@ export interface Strings {
   powerBattery: string;
   updated(secondsAgo: number): string;
   errorPrefix: string;
+  /** The Command Center rows. Each one carries the plugin's name, because ⌘K is a flat
+   *  list of everything and "Off" on its own belongs to nothing. */
+  commandOff: string;
+  commandOn: string;
+  commandTimer(hours: number): string;
+  commandAuto: string;
+  commandDisplayOn: string;
+  commandDisplayOff: string;
 }
 
 const en: Strings = {
@@ -75,6 +83,12 @@ const en: Strings = {
   powerBattery: "on battery",
   updated: (s) => (s < 5 ? "updated just now" : `updated ${s} s ago`),
   errorPrefix: "caffeinate failed",
+  commandOff: "Caffeine: off",
+  commandOn: "Caffeine: on",
+  commandTimer: (hours) => `Caffeine: ${hours} hours`,
+  commandAuto: "Caffeine: while agents work",
+  commandDisplayOn: "Caffeine: keep the display on",
+  commandDisplayOff: "Caffeine: let the display sleep",
 };
 
 const ru: Strings = {
@@ -113,6 +127,12 @@ const ru: Strings = {
   powerBattery: "от батареи",
   updated: (s) => (s < 5 ? "обновлено только что" : `обновлено ${s} с назад`),
   errorPrefix: "caffeinate не запустился",
+  commandOff: "Caffeine: выключить",
+  commandOn: "Caffeine: включить",
+  commandTimer: (hours) => `Caffeine: на ${hours} часа`,
+  commandAuto: "Caffeine: пока работают агенты",
+  commandDisplayOn: "Caffeine: не гасить экран",
+  commandDisplayOff: "Caffeine: разрешить гасить экран",
 };
 
 const uk: Strings = {
@@ -151,6 +171,12 @@ const uk: Strings = {
   powerBattery: "від батареї",
   updated: (s) => (s < 5 ? "оновлено щойно" : `оновлено ${s} с тому`),
   errorPrefix: "caffeinate не запустився",
+  commandOff: "Caffeine: вимкнути",
+  commandOn: "Caffeine: увімкнути",
+  commandTimer: (hours) => `Caffeine: на ${hours} години`,
+  commandAuto: "Caffeine: доки працюють агенти",
+  commandDisplayOn: "Caffeine: не гасити екран",
+  commandDisplayOff: "Caffeine: дозволити гасити екран",
 };
 
 const catalogue: Record<Locale, Strings> = { en, ru, uk };
