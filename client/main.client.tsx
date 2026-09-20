@@ -3,10 +3,11 @@ import type { PluginSurfaceProps } from "@getpaseo/plugin/client";
 import { useRpc } from "@getpaseo/plugin/client";
 import { Icon } from "@getpaseo/plugin/client/react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from "react-native";
-import { type Battery, type SetInput, type SetOptionsInput, type Status, getStatus, setMode, setOptions, sleepNow } from "../shared/caffeine.shared.ts";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Animated, Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { SLEEP_DELAY_MS, type Battery, type SetInput, type SetOptionsInput, type Status, getStatus, setMode, setOptions, sleepNow } from "../shared/caffeine.shared.ts";
 import { type Strings, detectAppLocale, formatRemaining, t } from "./i18n.ts";
+import { SILENCE_TIMEOUT_MS, type SleepEvent, type SleepPhase, isSleepInFlight, nextSleepPhase } from "./sleep-phase.ts";
 
 const QUERY_KEY = ["caffeine", "status"] as const;
 const TIMER_MINUTES = [30, 60, 120, 180, 480, 720] as const;
@@ -212,6 +213,7 @@ function ModeCard({
   onPress,
   children,
   tile,
+  iconPulse,
 }: {
   icon: string;
   title: string;
@@ -222,7 +224,10 @@ function ModeCard({
   children?: React.ReactNode;
   /** Two across on a phone, four across on a desktop. */
   tile: `${number}%`;
+  /** Breathes the glyph while something is in flight; steady when absent. */
+  iconPulse?: Animated.Value;
 }) {
+  const glyph = <Icon name={icon} size={16} color={selected ? theme.colors.accent : theme.colors.foregroundMuted} />;
   const body = (
     <View
       style={{
@@ -237,7 +242,7 @@ function ModeCard({
       }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <Icon name={icon} size={16} color={selected ? theme.colors.accent : theme.colors.foregroundMuted} />
+        {iconPulse ? <Animated.View style={{ opacity: iconPulse }}>{glyph}</Animated.View> : glyph}
         {/* flex so a title too long for the tile wraps inside it instead of over the border. */}
         <Text style={{ color: theme.colors.foreground, fontSize: 15, fontWeight: "600", flex: 1 }}>{title}</Text>
       </View>
@@ -272,6 +277,92 @@ function Chip({ label, selected, theme, onPress }: { label: string; selected: bo
       <Text style={{ color: selected ? theme.colors.accentForeground : theme.colors.foreground, fontSize: 13 }}>{label}</Text>
     </Pressable>
   );
+}
+
+/** Which sentence the tile is telling right now. */
+function sleepDetailFor(phase: SleepPhase, strings: Strings): string {
+  switch (phase) {
+    case "asking":
+      return strings.sleepAsking;
+    case "going":
+      return strings.sleepGoing;
+    case "asleep":
+      return strings.sleepAsleep;
+    case "idle":
+      return strings.sleepDetail;
+  }
+}
+
+/**
+ * The Sleep tile's little life: which phase it is in, and the two values that show it.
+ *
+ * The phases come from the status poll rather than from the mutation, because the
+ * mutation cannot report the thing that matters. `pmset sleepnow` suspends the Mac a
+ * second after the reply goes out, and a suspended Mac does not send a second message
+ * saying so — it simply stops answering. So an answer means "still here", a failed poll
+ * means "gone", and the tile is honest about which of those it has seen.
+ */
+function useSleepTile(poll: { dataUpdatedAt: number; errorUpdatedAt: number; isError: boolean }) {
+  const [phase, setPhase] = useState<SleepPhase>("idle");
+  const fire = useCallback((event: SleepEvent) => setPhase((current) => nextSleepPhase(current, event)), []);
+
+  const { dataUpdatedAt, errorUpdatedAt, isError } = poll;
+  useEffect(() => {
+    if (dataUpdatedAt) fire({ type: "answer" });
+  }, [dataUpdatedAt, fire]);
+  useEffect(() => {
+    if (isError) fire({ type: "silence" });
+  }, [isError, errorUpdatedAt, fire]);
+
+  // A Mac that answers all the way through plainly did not go under; the tile lets go
+  // rather than glowing at somebody for ever.
+  useEffect(() => {
+    if (phase !== "going") return;
+    const timer = setTimeout(() => fire({ type: "timeout" }), SILENCE_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [phase, fire]);
+
+  const pulse = useRef(new Animated.Value(1)).current;
+  const countdown = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!isSleepInFlight(phase)) {
+      pulse.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.25, duration: 550, useNativeDriver: false }),
+        Animated.timing(pulse, { toValue: 1, duration: 550, useNativeDriver: false }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      pulse.setValue(1);
+    };
+  }, [phase, pulse]);
+
+  useEffect(() => {
+    // `asking` gets a stub rather than a crawl: how long a request takes is the
+    // network's business, and a bar that guesses would be inventing progress.
+    if (phase === "asking") {
+      countdown.setValue(0.12);
+      return;
+    }
+    if (phase !== "going") {
+      countdown.setValue(0);
+      return;
+    }
+    // From here the length is known to the millisecond — the daemon waits exactly this
+    // long before calling pmset — so the bar runs out as the Mac does.
+    countdown.setValue(0.12);
+    const run = Animated.timing(countdown, { toValue: 1, duration: SLEEP_DELAY_MS, useNativeDriver: false });
+    run.start();
+    return () => run.stop();
+  }, [phase, countdown]);
+
+  return { phase, fire, pulse, countdown };
 }
 
 /**
@@ -313,7 +404,7 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
   const askSleep = useRpc(sleepNow);
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, dataUpdatedAt, errorUpdatedAt } = useQuery({
     queryKey: QUERY_KEY,
     queryFn: () => fetchStatus({}),
     // Five seconds: the agent count and the tick time are read by a person glancing
@@ -331,10 +422,16 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
     onSuccess: (status) => queryClient.setQueryData(QUERY_KEY, status),
   });
 
-  // No optimistic status here and nothing written back: the answer describes a Mac that
-  // is about to suspend, and a moment later the poll behind this surface stops being
-  // answered at all. The tile just stays pressed until the connection dies with it.
-  const sleep = useMutation({ mutationFn: () => askSleep({}) });
+  // No optimistic status and nothing written back: the answer describes a Mac that is
+  // about to suspend, and what happens next is told by the poll going quiet rather than
+  // by anything this request returns.
+  const tile = useSleepTile({ dataUpdatedAt, errorUpdatedAt, isError });
+  const sleep = useMutation({
+    mutationFn: () => askSleep({}),
+    onMutate: () => tile.fire({ type: "press" }),
+    onSuccess: () => tile.fire({ type: "answered" }),
+    onError: () => tile.fire({ type: "refused" }),
+  });
 
   const compact = layout.compact;
   const m = compact ? METRICS.compact : METRICS.roomy;
@@ -452,14 +549,27 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
               onPress={() => changeOptions.mutate({ keepDisplay: !data.keepDisplay })}
             />
             <ModeCard
-              icon="Moon"
-              title={strings.sleepLabel}
-              detail={strings.sleepDetail}
-              selected={sleep.isPending}
+              icon={tile.phase === "asleep" ? "MoonStar" : "Moon"}
+              title={tile.phase === "asleep" ? strings.sleptLabel : strings.sleepLabel}
+              detail={sleepDetailFor(tile.phase, strings)}
+              selected={tile.phase !== "idle"}
               theme={theme}
               tile={m.tile}
+              iconPulse={tile.pulse}
               onPress={() => sleep.mutate()}
-            />
+            >
+              {isSleepInFlight(tile.phase) ? (
+                <View style={{ height: 3, borderRadius: 2, backgroundColor: theme.colors.border, overflow: "hidden", marginTop: 4 }}>
+                  <Animated.View
+                    style={{
+                      height: 3,
+                      backgroundColor: theme.colors.accent,
+                      width: tile.countdown.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }),
+                    }}
+                  />
+                </View>
+              ) : null}
+            </ModeCard>
           </View>
 
           <WakeLink url={data.wakeUrl} theme={theme} strings={strings} />

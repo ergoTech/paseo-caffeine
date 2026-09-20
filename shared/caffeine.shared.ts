@@ -96,6 +96,13 @@ export const setOptions = defineRpc({
  * usually a phone that is about to lose the connection anyway and wants to know the
  * request was taken, not what the machine looks like while it suspends.
  */
+/**
+ * How long the Mac gets after answering before it actually suspends. Shared rather than
+ * server-side only, because the client counts down the same second on screen — a bar
+ * that finishes early or late reads as a lie about what the machine is doing.
+ */
+export const SLEEP_DELAY_MS = 1_000;
+
 export const sleepNow = defineRpc({
   name: "caffeine.sleep",
   input: z.object({}),

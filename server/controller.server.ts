@@ -137,14 +137,24 @@ export function createController(deps: ControllerDeps): Controller {
     },
 
     /**
-     * No tick and no write: sleeping is not a mode and leaves nothing behind. The Mac
-     * comes back in whatever mode it went under with, which is the point — a machine
-     * told to sleep at midnight should still be held awake for agents in the morning.
+     * The hold goes first, and it has to. `caffeinate -s` outranks `pmset sleepnow`:
+     * under a hold the Mac drops to DarkWake and sits there, awake in every way that
+     * costs power, until the hold ends of its own accord. Measured on this machine —
+     * `sleepnow` at 23:34:28 gave "Entering DarkWake state", and the real "Entering
+     * Sleep state" arrived at 23:40:40, six minutes later, when caffeinate let go.
+     *
+     * Killing the child is enough; the mode is left alone. Sleeping is an act rather
+     * than a mode, so the Mac comes back under the same policy it went under with and
+     * the next tick takes the hold again — which matters, because a Mac woken by the
+     * link would otherwise have a minute of idle before macOS put it straight back.
+     *
+     * The second the sleeper waits before calling pmset is also the second the child
+     * needs to die in.
      */
     sleep() {
-      const snap = snapshot();
+      deps.keeper.release();
       deps.sleepNow?.();
-      return snap;
+      return snapshot();
     },
 
     tick: reconcile,

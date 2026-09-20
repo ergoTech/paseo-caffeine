@@ -252,17 +252,36 @@ test("the wake link is read afresh on every status", async () => {
   f.controller.stop();
 });
 
-test("sleep answers with the Mac as it still is, then asks it to go under", async () => {
+test("sleep lets the hold go before asking the Mac to suspend", async () => {
   const f = fakes({ mode: "on", until: "", keepDisplay: false }, () => 0);
   await f.controller.start();
+  assert.equal(f.keeper.active(), true);
+  const releases = f.releaseCount();
   const writes = f.writes.length;
 
   const status = f.controller.sleep();
+  // Order is the whole fix: caffeinate -s outranks pmset sleepnow, and a sleep asked
+  // for under a live hold buys a DarkWake and nothing more.
+  assert.equal(f.releaseCount(), releases + 1);
   assert.equal(f.sleepCount(), 1);
-  // Still "on", still held: sleeping is an act rather than a mode, and the Mac comes
-  // back the way it went under.
+  assert.equal(status.active, false);
+  // The mode itself is untouched and nothing is written: sleeping is an act, not a mode.
   assert.equal(status.mode, "on");
-  assert.equal(status.active, true);
   assert.equal(f.writes.length, writes);
+  f.controller.stop();
+});
+
+test("the hold comes back on the next tick after a sleep", async () => {
+  const f = fakes({ mode: "on", until: "", keepDisplay: false }, () => 0);
+  await f.controller.start();
+  f.controller.sleep();
+  assert.equal(f.keeper.active(), false);
+
+  // Whether the Mac went under or the suspend was refused, the policy is still "on" —
+  // so the tick takes the hold again. A Mac woken by the link would otherwise get one
+  // idle minute before macOS put it straight back.
+  const status = await f.controller.tick();
+  assert.equal(status.active, true);
+  assert.equal(status.mode, "on");
   f.controller.stop();
 });

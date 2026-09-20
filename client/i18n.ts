@@ -27,6 +27,11 @@ export interface Strings {
   displayState(on: boolean): string;
   sleepLabel: string;
   sleepDetail: string;
+  /** The tile's own three stages, and what it is called once the Mac has gone. */
+  sleepAsking: string;
+  sleepGoing: string;
+  sleptLabel: string;
+  sleepAsleep: string;
   wakeHint: string;
   wakeMissing: string;
   batteryCharged: string;
@@ -77,6 +82,10 @@ const en: Strings = {
   displayState: (on) => (on ? "the screen stays lit" : "the screen sleeps"),
   sleepLabel: "Sleep now",
   sleepDetail: "goes under in a second",
+  sleepAsking: "asking the Mac…",
+  sleepGoing: "going under now…",
+  sleptLabel: "Asleep",
+  sleepAsleep: "it stopped answering",
   wakeHint: "To wake it up, use this link",
   wakeMissing: "no address to wake by yet",
   batteryCharged: "charged",
@@ -123,6 +132,10 @@ const ru: Strings = {
   displayState: (on) => (on ? "экран не гаснет" : "экран гаснет как обычно"),
   sleepLabel: "Усыпить",
   sleepDetail: "уснёт через секунду",
+  sleepAsking: "прошу мак…",
+  sleepGoing: "засыпает…",
+  sleptLabel: "Спит",
+  sleepAsleep: "перестал отвечать",
   wakeHint: "Чтобы разбудить, открой эту ссылку",
   wakeMissing: "адреса пока нет",
   batteryCharged: "заряжена",
@@ -169,6 +182,10 @@ const uk: Strings = {
   displayState: (on) => (on ? "екран не гасне" : "екран гасне як завжди"),
   sleepLabel: "Приспати",
   sleepDetail: "засне за секунду",
+  sleepAsking: "прошу мак…",
+  sleepGoing: "засинає…",
+  sleptLabel: "Спить",
+  sleepAsleep: "перестав відповідати",
   wakeHint: "Щоб розбудити, відкрий це посилання",
   wakeMissing: "адреси поки немає",
   batteryCharged: "заряджена",

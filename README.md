@@ -49,11 +49,45 @@ timer alike.
 
 ## Sleeping, and getting back
 
-**Sleep now** runs `pmset sleepnow`, a second after answering. The delay is the whole
-trick: the caller is usually a phone, the answer travels over a connection the suspend is
-about to kill, and a reply that leaves first turns "did it take?" into a fact. Nothing is
-written down — sleeping is an act, not a mode, so a Mac held awake for agents goes under
-now and is held again when it comes back.
+**Sleep now** kills the `caffeinate` child and then runs `pmset sleepnow`, a second
+later. Both halves of that are load-bearing.
+
+The hold has to go first. `caffeinate -s` outranks `pmset sleepnow`: under a live hold
+the Mac drops to DarkWake and stays there, awake in every way that costs power, until the
+hold ends by itself. Measured here — `sleepnow` at 23:34:28 produced "Entering DarkWake
+state", and the real "Entering Sleep state" landed at 23:40:40, six minutes later, when
+caffeinate let go.
+
+The second of delay then serves twice over: it is the head start the reply needs, since
+the caller is usually a phone whose connection the suspend is about to kill — and it is
+the window the released child needs to actually exit.
+
+The mode itself is left alone and nothing is written down. Sleeping is an act rather than
+a mode, so the Mac comes back under the same policy it went under with and the next tick
+takes the hold again. That matters more than it looks: a Mac woken by the link, with the
+plugin set to Off instead, would get one idle minute before macOS put it straight back.
+
+The tile shows four stages, because this is the one action whose result cannot be
+reported by the thing performing it — a suspended Mac does not send a message saying it
+suspended, it stops sending messages:
+
+| | |
+|---|---|
+| **asking** | the request is out. The bar shows a stub rather than a crawl: how long a request takes is the network's business, and a bar that guessed would be inventing progress |
+| **going** | answered, and the Mac is counting down its last second. Here the length *is* known — `SLEEP_DELAY_MS` is shared with the server for exactly this — so the bar runs out as the Mac does |
+| **asleep** | the status poll stopped being answered. That silence is the only honest confirmation there is |
+| **idle** | either it never went, or it came back |
+
+The glyph breathes while the request is in flight and steadies when it is over, so a
+phone glanced at across a room still says whether anything is happening.
+
+The phases live in `client/sleep-phase.ts` as a reducer rather than inside the component:
+they are the part worth testing, and a plugin surface cannot be rendered under
+`node --test`. It is also where the awkward cases are written down — silence with nothing
+pending is a closed lid or a switched network and must not be claimed as a sleep; a status
+landing mid-countdown is just the five-second poll overlapping the one-second delay; and a
+Mac that answers all the way through releases the tile after twenty seconds rather than
+leaving it lit for ever.
 
 Waking it is the other half, and it belongs to the network rather than to this plugin.
 A sleeping Mac hands its Bonjour-advertised services to a **sleep proxy** — an Apple TV
