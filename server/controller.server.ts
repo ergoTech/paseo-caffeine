@@ -9,6 +9,10 @@ export interface ControllerDeps {
   runningCount(): Promise<number | null>;
   /** The battery, read once per tick; null on a machine that has none. */
   readBattery?(): Promise<Battery | null>;
+  /** The link that wakes this Mac, re-read on every snapshot because the address moves. */
+  wakeUrl?(): string;
+  /** Orders the Mac under; absent in tests that have no business suspending anything. */
+  sleepNow?(): void;
   now?: () => number;
   tickMs?: number;
   log?: (line: string) => void;
@@ -20,6 +24,8 @@ export interface Controller {
   status(): Status;
   set(input: SetInput): Promise<Status>;
   setOptions(patch: SetOptionsInput): Promise<Status>;
+  /** Snapshots first, then asks for sleep: the answer has to outrun the suspend. */
+  sleep(): Status;
   tick(): Promise<Status>;
 }
 
@@ -52,7 +58,7 @@ export function createController(deps: ControllerDeps): Controller {
       error: deps.keeper.error(),
       tickAt,
       keepDisplay: stored.keepDisplay,
-      hidden: stored.hidden,
+      wakeUrl: deps.wakeUrl?.() ?? "",
       battery,
     };
   }
@@ -109,8 +115,8 @@ export function createController(deps: ControllerDeps): Controller {
       // the machine the user is sitting at, not of why the Mac is being kept awake.
       const next: Stored =
         input.mode === "timer"
-          ? { mode: "timer", until: untilForMinutes(now(), input.minutes), keepDisplay: stored.keepDisplay, hidden: stored.hidden }
-          : { mode: input.mode, until: "", keepDisplay: stored.keepDisplay, hidden: stored.hidden };
+          ? { mode: "timer", until: untilForMinutes(now(), input.minutes), keepDisplay: stored.keepDisplay }
+          : { mode: input.mode, until: "", keepDisplay: stored.keepDisplay };
       // A different deadline or a different mode needs a child with different
       // arguments, so the old one goes first and reconcile() starts the right one.
       if (next.mode !== stored.mode || next.until !== stored.until) deps.keeper.release();
@@ -120,18 +126,25 @@ export function createController(deps: ControllerDeps): Controller {
     },
 
     async setOptions(patch) {
-      const next: Stored = {
-        ...stored,
-        keepDisplay: patch.keepDisplay ?? stored.keepDisplay,
-        hidden: patch.hidden ?? stored.hidden,
-      };
-      if (next.keepDisplay === stored.keepDisplay && next.hidden === stored.hidden) return reconcile();
-      // Only the display choice reaches caffeinate, and it cannot be told to drop -d while
-      // it runs — so that one restarts the child, and hiding the card touches nothing.
-      if (next.keepDisplay !== stored.keepDisplay) deps.keeper.release();
+      const next: Stored = { ...stored, keepDisplay: patch.keepDisplay ?? stored.keepDisplay };
+      if (next.keepDisplay === stored.keepDisplay) return reconcile();
+      // caffeinate cannot be told to drop -d while it runs, so the child goes and
+      // reconcile() starts one with the right arguments.
+      deps.keeper.release();
       stored = next;
       await deps.write(stored);
       return reconcile();
+    },
+
+    /**
+     * No tick and no write: sleeping is not a mode and leaves nothing behind. The Mac
+     * comes back in whatever mode it went under with, which is the point — a machine
+     * told to sleep at midnight should still be held awake for agents in the morning.
+     */
+    sleep() {
+      const snap = snapshot();
+      deps.sleepNow?.();
+      return snap;
     },
 
     tick: reconcile,

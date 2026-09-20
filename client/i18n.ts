@@ -25,8 +25,10 @@ export interface Strings {
   minutes(n: number): string;
   displayLabel: string;
   displayState(on: boolean): string;
-  hiddenLabel: string;
-  hiddenState(on: boolean): string;
+  sleepLabel: string;
+  sleepDetail: string;
+  wakeHint: string;
+  wakeMissing: string;
   batteryCharged: string;
   batteryUntilFull(eta: string): string;
   batteryUntilEmpty(eta: string): string;
@@ -73,8 +75,10 @@ const en: Strings = {
   minutes: (n) => `${n} min`,
   displayLabel: "Keep display on",
   displayState: (on) => (on ? "the screen stays lit" : "the screen sleeps"),
-  hiddenLabel: "Hide from sidebar",
-  hiddenState: (on) => (on ? "only in Settings" : "in the sidebar"),
+  sleepLabel: "Sleep now",
+  sleepDetail: "goes under in a second",
+  wakeHint: "To wake it up, use this link",
+  wakeMissing: "no address to wake by yet",
   batteryCharged: "charged",
   batteryUntilFull: (eta) => `full in ${eta}`,
   batteryUntilEmpty: (eta) => `${eta} left`,
@@ -117,8 +121,10 @@ const ru: Strings = {
   minutes: (n) => `${n} мин`,
   displayLabel: "Не гасить экран",
   displayState: (on) => (on ? "экран не гаснет" : "экран гаснет как обычно"),
-  hiddenLabel: "Скрыть из меню",
-  hiddenState: (on) => (on ? "только в настройках" : "в боковом меню"),
+  sleepLabel: "Усыпить",
+  sleepDetail: "уснёт через секунду",
+  wakeHint: "Чтобы разбудить, открой эту ссылку",
+  wakeMissing: "адреса пока нет",
   batteryCharged: "заряжена",
   batteryUntilFull: (eta) => `полная через ${eta}`,
   batteryUntilEmpty: (eta) => `хватит на ${eta}`,
@@ -161,8 +167,10 @@ const uk: Strings = {
   minutes: (n) => `${n} хв`,
   displayLabel: "Не гасити екран",
   displayState: (on) => (on ? "екран не гасне" : "екран гасне як завжди"),
-  hiddenLabel: "Сховати з меню",
-  hiddenState: (on) => (on ? "тільки в налаштуваннях" : "у бічному меню"),
+  sleepLabel: "Приспати",
+  sleepDetail: "засне за секунду",
+  wakeHint: "Щоб розбудити, відкрий це посилання",
+  wakeMissing: "адреси поки немає",
   batteryCharged: "заряджена",
   batteryUntilFull: (eta) => `повна через ${eta}`,
   batteryUntilEmpty: (eta) => `вистачить на ${eta}`,

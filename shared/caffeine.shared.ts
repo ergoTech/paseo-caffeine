@@ -37,8 +37,13 @@ export const status = z.object({
   tickAt: z.string().default(""),
   /** Whether the display is held awake along with the system. */
   keepDisplay: z.boolean().default(false),
-  /** Whether the settings card is kept off the surface, leaving it to the settings screen. */
-  hidden: z.boolean().default(false),
+  /**
+   * The link that wakes this Mac from the local network, or "" when the anchor could not
+   * be raised. Carried in the status rather than fetched on its own, because the address
+   * in it changes with the network and the surface already re-reads this every five
+   * seconds.
+   */
+  wakeUrl: z.string().default(""),
   battery: battery.nullable().default(null),
 });
 
@@ -52,7 +57,6 @@ export const setInput = z.discriminatedUnion("mode", [
 /** A patch: whatever is left out keeps the value it already had. */
 export const setOptionsInput = z.object({
   keepDisplay: z.boolean().optional(),
-  hidden: z.boolean().optional(),
 });
 
 export type Mode = z.output<typeof mode>;
@@ -74,14 +78,26 @@ export const setMode = defineRpc({
 });
 
 /**
- * Separate from `setMode` on purpose: both switches are orthogonal to the mode, and
- * folding them into that discriminated union would make every mode change carry them
- * from the client — and eventually drop one.
+ * Separate from `setMode` on purpose: the display switch is orthogonal to the mode, and
+ * folding it into that discriminated union would make every mode change carry it from
+ * the client — and eventually drop it.
  */
 export const setOptions = defineRpc({
   // Lower case only: the SDK matches method names against /^[a-z][a-z0-9._-]*$/ and
   // throws on a capital, which takes the whole plugin down at import time.
   name: "caffeine.set-options",
   input: setOptionsInput,
+  output: status,
+});
+
+/**
+ * The other direction: not a mode that outlives the call, but one act. The status comes
+ * back describing the Mac a second before it goes under — by design, since the caller is
+ * usually a phone that is about to lose the connection anyway and wants to know the
+ * request was taken, not what the machine looks like while it suspends.
+ */
+export const sleepNow = defineRpc({
+  name: "caffeine.sleep",
+  input: z.object({}),
   output: status,
 });

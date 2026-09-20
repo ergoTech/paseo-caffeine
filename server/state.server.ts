@@ -12,13 +12,14 @@ import { type Stored, defaultStored } from "./policy.ts";
  */
 export const STATE_FILE = join(homedir(), ".jobby-jobs", "caffeine.json");
 
-// Both switches default rather than being required, so a file written before either of
-// them existed reads back as "let the screen sleep, show the card" instead of as malformed.
+// The switch defaults rather than being required, so a file written before it existed
+// reads back as "let the screen sleep" instead of as malformed. Unknown keys are dropped
+// on the way in, which is how a file left behind by an older version — one that still
+// stored whether the sidebar entry was hidden — stops mattering.
 const stored = z.object({
   mode,
   until: z.string().default(""),
   keepDisplay: z.boolean().default(false),
-  hidden: z.boolean().default(false),
 });
 
 /** Absent, unreadable, malformed and unknown all mean the same thing: off. */

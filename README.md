@@ -14,8 +14,8 @@ gives Paseo the same lever with three positions:
 | **While agents work** | The Mac does not sleep while at least one Paseo agent on this host is running, and for three minutes after the last one went quiet. |
 
 Two more tiles sit under the modes: whether the display is held along with the system,
-and whether this page keeps its entry in the sidebar. The whole page is also a settings
-screen, so hiding the entry never puts it out of reach.
+and **Sleep now**, which sends the Mac under from wherever you are. Below them is the
+link that wakes it again.
 
 Only system sleep is held and the display sleeps as usual — unless **Keep the display
 on** is switched on, which holds both. A closed lid still sleeps a MacBook, `caffeinate`
@@ -43,23 +43,52 @@ ties the child to the plugin, so a plugin killed without cleanup takes its `caff
 down with it. Timer holds add `-t` as a second guard, and **Keep the display on** adds
 `-d`.
 
-The two toggles — **Keep display on** and **Hide from sidebar** — share one RPC
-that takes a patch, rather than living on the mode: they are orthogonal to it, and both
-survive a mode change and a spent timer. Only the first reaches `caffeinate`, so hiding
-the entry restarts nothing.
+**Keep display on** rides on its own RPC that takes a patch, rather than on the mode: it
+is orthogonal to why the Mac is being held, and it survives a mode change and a spent
+timer alike.
 
-**The sidebar entry is withdrawn, not skipped.** `addSidebarItem` returns its own cleanup,
-but `contribute()` runs once, synchronously, and cannot wait for the daemon to say whether
-the entry is wanted. So the entry is always registered and then taken away a moment later
-if the stored answer says to. The surface is the only part that polls, so it reports the
-switch through `client/sidebar.ts` — a one-value hand-off, because a component cannot
-reach the client context and `contribute()` cannot hold React state. That module also
-remembers the last value, so a five-second status poll does not re-register anything.
+## Sleeping, and getting back
 
-**Hiding is not a one-way door**: `addSettingsScreen` contributes the same page a second
-time, and the switch that put the entry away is on it. A header button would have been the
-obvious third place and is not available — `PluginHeaderButtonContribution` needs a
-`workspaceId`, and this surface is global.
+**Sleep now** runs `pmset sleepnow`, a second after answering. The delay is the whole
+trick: the caller is usually a phone, the answer travels over a connection the suspend is
+about to kill, and a reply that leaves first turns "did it take?" into a fact. Nothing is
+written down — sleeping is an act, not a mode, so a Mac held awake for agents goes under
+now and is held again when it comes back.
+
+Waking it is the other half, and it belongs to the network rather than to this plugin.
+A sleeping Mac hands its Bonjour-advertised services to a **sleep proxy** — an Apple TV
+or a HomePod on the same network. The proxy answers ARP on the Mac's behalf, and when
+somebody opens a connection to one of those advertised ports it sends the magic packet
+that wakes it. So the plugin advertises one:
+
+- a small web server on port **9999**, which answers the knock with one page: this Mac's
+  name, the minute it woke, the battery, and which mode it came back under
+- `dns-sd -R … _caffeine-wake._tcp … 9999` beside it, which is what the proxy actually
+  sees — a listening socket nobody announced is invisible to that machinery
+
+The page is a receipt, not a service. Everything in it is inline — no fonts, no scripts,
+no second request — because whoever is reading it just woke a Mac from a phone that may
+have no route anywhere except the VPN it came in on. `no-store`, too: it describes a
+moment, and a cached copy of it is a lie the next time the link is pressed.
+
+The link under the tiles is that port at the Mac's own address on the local network.
+Copy it once into a shortcut on the phone; pressing it months later wakes the Mac from
+outside the house too, as long as you are on the VPN that puts you inside it.
+
+`dns-sd` has no `-w` to tie it to the plugin the way `caffeinate` has, and leaning on a
+broken stdout pipe does not work either — it goes quiet after the registration line, so
+it never writes into the pipe that would kill it. Two reloads left two live `dns-sd`s
+both advertising the same port. So each start reaps the announcements of its own past
+lives, matched on the exact command line `announce` builds, before making a new one.
+
+Three things have to be true for any of this to work, and none of them are the plugin's
+to arrange: **Wake for network access** on in Energy Saver, the Mac **on the charger**
+(Apple ignores network wakes on battery), and a sleep proxy on the network. `pmset -g log`
+settles it after the fact — a wake `due to … wifibt` came from the network, one `due to
+… HID Activity` came from somebody touching the trackpad.
+
+A header button would have been an obvious third place for all this and is not available —
+`PluginHeaderButtonContribution` needs a `workspaceId`, and this surface is global.
 
 The battery comes from `pmset -g batt`, parsed rather than computed — `0:00 remaining`
 next to `charged` means "not applicable", and `(no estimate)` means pmset is still
@@ -85,6 +114,15 @@ and `index.client.tsx` loads only in the app; `server/`, `client/` and `shared/`
 compiler boundaries, so the controller starts unconditionally in `index.server.ts` with
 no runtime check for where it is running.
 
+**The wake port is 9999 on purpose.** Browsers refuse a long list of ports outright, 22
+and 5900 among them, and the point of this one is that a link to it opens from a phone.
+Anything above 1024 also keeps the socket out of root's territory.
+
+**The anchor is not authenticated, and cannot usefully be.** By the time a connection
+arrives the Mac is already awake — the proxy woke it to deliver the packet. A secret
+checked after that point protects nothing, and the worst anyone within reach of the
+network can do with the port is wake a Mac that was asleep.
+
 **The timer is set in minutes, not hours.** Half an hour is the shortest useful hold and
 does not fit a whole-hour union, so `setMode` takes `minutes` and the chips render
 themselves through the same `formatRemaining` the countdown uses — 30 becomes "30 min",
@@ -92,9 +130,11 @@ themselves through the same `formatRemaining` the countdown uses — 30 becomes 
 
 **The host's `SettingsSwitch` needs a full-width row.** Given half a phone's width it
 wraps the label, wraps the hint, and drops the toggle onto a line of its own — three
-ragged lines where the rest of the page has tidy tiles. Both toggles are `ModeCard`s
-instead, showing "on" the same way a chosen mode does: by the border. The icon carries
-the state too, `MonitorOff`/`Monitor` and `Eye`/`EyeOff`. The app ships the whole lucide
+ragged lines where the rest of the page has tidy tiles. The display toggle is a
+`ModeCard` instead, showing "on" the same way a chosen mode does: by the border, with
+`MonitorOff`/`Monitor` carrying the state as well. **Sleep now** is the same tile shape
+without a state to show — it borrows the selected look only while the request is in
+flight, which on a phone is the last thing rendered before the connection dies. The app ships the whole lucide
 set, which is worth checking in
 `Contents/Resources/app-dist/_expo/static/js/web/index-*.js` rather than guessing — the
 names appear there as `Object.defineProperty(x,"Coffee",…)`.

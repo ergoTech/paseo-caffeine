@@ -17,8 +17,6 @@ export interface Stored {
   until: string;
   /** Hold the display awake too, rather than letting it sleep under a waking system. */
   keepDisplay: boolean;
-  /** Keep the settings card off the surface; the settings screen always has it. */
-  hidden: boolean;
 }
 
 export interface Decision {
@@ -29,7 +27,7 @@ export interface Decision {
 }
 
 export function defaultStored(): Stored {
-  return { mode: "off", until: "", keepDisplay: false, hidden: false };
+  return { mode: "off", until: "", keepDisplay: false };
 }
 
 export function untilForMinutes(nowMs: number, minutes: number): string {
@@ -45,9 +43,9 @@ export function nextBusyUntil(previousMs: number, running: number | null, nowMs:
   return running !== null && running > 0 ? nowMs + GRACE_MS : previousMs;
 }
 
-/** Off, but still remembering the two switches, which have nothing to do with the mode. */
+/** Off, but still remembering the display switch, which has nothing to do with the mode. */
 function offKeeping(stored: Stored): Stored {
-  return { ...defaultStored(), keepDisplay: stored.keepDisplay, hidden: stored.hidden };
+  return { ...defaultStored(), keepDisplay: stored.keepDisplay };
 }
 
 export function decide(stored: Stored, nowMs: number, busyUntilMs: number): Decision {

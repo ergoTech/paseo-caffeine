@@ -4,10 +4,9 @@ import { useRpc } from "@getpaseo/plugin/client";
 import { Icon } from "@getpaseo/plugin/client/react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
-import { type Battery, type SetInput, type SetOptionsInput, type Status, getStatus, setMode, setOptions } from "../shared/caffeine.shared.ts";
+import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { type Battery, type SetInput, type SetOptionsInput, type Status, getStatus, setMode, setOptions, sleepNow } from "../shared/caffeine.shared.ts";
 import { type Strings, detectAppLocale, formatRemaining, t } from "./i18n.ts";
-import { reportHidden } from "./sidebar.ts";
 
 const QUERY_KEY = ["caffeine", "status"] as const;
 const TIMER_MINUTES = [30, 60, 120, 180, 480, 720] as const;
@@ -275,12 +274,43 @@ function Chip({ label, selected, theme, onPress }: { label: string; selected: bo
   );
 }
 
+/**
+ * The link that wakes this Mac, and the one control on the page meant to be used when
+ * the page itself is unreachable. So it is shown as text rather than as a button: the
+ * point is to copy it once — into a shortcut, a bookmark, whatever the phone offers —
+ * and press it months later, from a phone that cannot see Paseo because the Mac it runs
+ * on is asleep.
+ *
+ * Pressing it here still opens it, which is how you check the anchor answers at all.
+ * The address is the Mac's own on the local network, so the link only carries from
+ * inside the house or through the VPN that puts you there.
+ */
+function WakeLink({ url, theme, strings }: { url: string; theme: PluginTheme; strings: Strings }) {
+  if (!url) {
+    return <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, textAlign: "center" }}>{strings.wakeMissing}</Text>;
+  }
+  return (
+    <View style={{ alignItems: "center", gap: 4 }}>
+      <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{strings.wakeHint}</Text>
+      <Text
+        selectable
+        accessibilityRole="link"
+        onPress={() => void Linking.openURL(url).catch(() => undefined)}
+        style={{ color: theme.colors.accent, fontSize: 13 }}
+      >
+        {url}
+      </Text>
+    </View>
+  );
+}
+
 export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
   const strings = t(detectAppLocale());
   const now = useNow();
   const fetchStatus = useRpc(getStatus);
   const applyMode = useRpc(setMode);
   const applyOptions = useRpc(setOptions);
+  const askSleep = useRpc(sleepNow);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -301,11 +331,10 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
     onSuccess: (status) => queryClient.setQueryData(QUERY_KEY, status),
   });
 
-  // contribute() cannot poll, so the surface passes the switch along as it learns it.
-  const hidden = data?.hidden;
-  useEffect(() => {
-    if (hidden !== undefined) reportHidden(hidden);
-  }, [hidden]);
+  // No optimistic status here and nothing written back: the answer describes a Mac that
+  // is about to suspend, and a moment later the poll behind this surface stops being
+  // answered at all. The tile just stays pressed until the connection dies with it.
+  const sleep = useMutation({ mutationFn: () => askSleep({}) });
 
   const compact = layout.compact;
   const m = compact ? METRICS.compact : METRICS.roomy;
@@ -423,15 +452,17 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
               onPress={() => changeOptions.mutate({ keepDisplay: !data.keepDisplay })}
             />
             <ModeCard
-              icon={data.hidden ? "EyeOff" : "Eye"}
-              title={strings.hiddenLabel}
-              detail={strings.hiddenState(data.hidden)}
-              selected={data.hidden}
+              icon="Moon"
+              title={strings.sleepLabel}
+              detail={strings.sleepDetail}
+              selected={sleep.isPending}
               theme={theme}
               tile={m.tile}
-              onPress={() => changeOptions.mutate({ hidden: !data.hidden })}
+              onPress={() => sleep.mutate()}
             />
           </View>
+
+          <WakeLink url={data.wakeUrl} theme={theme} strings={strings} />
         </>
       )}
     </ScrollView>

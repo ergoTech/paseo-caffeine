@@ -1,9 +1,7 @@
-import type { PluginCleanup } from "@getpaseo/plugin";
 import type { PluginClientContext } from "@getpaseo/plugin/client";
-import { getStatus, setMode, setOptions } from "./shared/caffeine.shared.ts";
+import { getStatus, setMode, setOptions, sleepNow } from "./shared/caffeine.shared.ts";
 import { detectAppLocale, t } from "./client/i18n.ts";
 import { CaffeineSurface } from "./client/main.client.tsx";
-import { onHiddenChange, reportHidden } from "./client/sidebar.ts";
 
 export default function contribute(client: PluginClientContext) {
   // Paseo's own language, not the device's: these titles are fixed here, at registration,
@@ -11,23 +9,15 @@ export default function contribute(client: PluginClientContext) {
   const strings = t(detectAppLocale());
   client.addSurface("main", CaffeineSurface);
 
-  // The whole page, a second time, under Settings. This is what makes hiding the sidebar
-  // entry safe: the switch that put it away is still reachable from the page itself.
+  // The whole page, a second time, under Settings: the same controls are as much a
+  // setting as a surface, and Paseo's own settings are where a person goes looking for
+  // "does this machine sleep".
   client.addSettingsScreen({ id: "settings", title: strings.title, icon: "Coffee", Component: CaffeineSurface });
 
-  // The sidebar entry comes and goes with the switch. contribute() runs once and cannot
-  // wait for the daemon, so the entry is registered first and withdrawn a moment later if
-  // the stored answer says to.
-  const sidebarItem = { id: "main", title: strings.sidebarTitle, icon: "Coffee", surface: "main" };
-  let removeSidebarItem: PluginCleanup | null = client.addSidebarItem(sidebarItem);
-  const stopWatching = onHiddenChange((hidden) => {
-    if (hidden) {
-      void removeSidebarItem?.();
-      removeSidebarItem = null;
-    } else if (!removeSidebarItem) {
-      removeSidebarItem = client.addSidebarItem(sidebarItem);
-    }
-  });
+  // Kept rather than dropped: `contribute()` has to hand back a cleanup — the app
+  // refuses the whole contribution otherwise, sidebar entry and surface included, and
+  // says so only in ~/Library/Logs/Paseo/main.log.
+  const removeSidebarItem = client.addSidebarItem({ id: "main", title: strings.sidebarTitle, icon: "Coffee", surface: "main" });
 
   const commands = [
     { id: "off", title: strings.commandOff, input: { mode: "off" } as const },
@@ -67,15 +57,24 @@ export default function contribute(client: PluginClientContext) {
     });
   }
 
+  client.addCommandCenterItem({
+    id: "sleep-now",
+    title: "Caffeine: sleep now",
+    icon: "Moon",
+    context: "global",
+    keywords: ["caffeine", "sleep", "suspend"],
+    async onSelect({ rpc }) {
+      await rpc(sleepNow, {});
+    },
+  });
+
   // Any connecting client calls caffeine.get once, which hands the daemon's API to the
-  // probe. Without this, auto mode after a daemon restart would count nothing until
-  // somebody opened the surface. The same answer settles the sidebar entry.
-  void client
-    .rpc(getStatus, {})
-    .then((status) => reportHidden(status.hidden))
-    .catch(() => undefined);
+  // probe and brings the wake anchor up. Without this, auto mode after a daemon restart
+  // would count nothing — and the Mac could go to sleep unannounced — until somebody
+  // opened the surface.
+  void client.rpc(getStatus, {}).catch(() => undefined);
 
   return () => {
-    stopWatching();
+    void removeSidebarItem?.();
   };
 }
