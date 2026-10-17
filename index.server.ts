@@ -3,6 +3,7 @@ import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { getStatus, setMode, setOptions, sleepNow } from "./shared/caffeine.shared.ts";
 import { createAgentsProbe } from "./server/agents.server.ts";
 import { createBatteryProbe } from "./server/battery.server.ts";
+import { describeCaffeine, describeRpc } from "./server/capabilities.server.ts";
 import { type Controller, createController } from "./server/controller.server.ts";
 import { createKeeper } from "./server/keeper.server.ts";
 import { renderWakePage } from "./server/page.server.ts";
@@ -80,6 +81,9 @@ export default function contribute(server: PluginServerContext) {
     const instance = await startedServer();
     return instance.sleep();
   });
+
+  // For God Mode: the operations above, described for an assistant that cannot see them.
+  server.handle(describeRpc, () => describeCaffeine());
 
   return () => {
     controller.stop();

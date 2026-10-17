@@ -135,6 +135,20 @@ find its own directory.
 Doubt resolves towards staying awake: if the daemon does not answer about agents, the
 last answer stands for the same three minutes an idle answer would.
 
+## From ChatGPT, through God Mode
+
+`meta.describe` tells an assistant outside Paseo what this plugin can do, because Paseo
+itself hands a remote client nothing but a blind RPC call. It answers with seven operations
+in the `paseo.capabilities/1` shape: the status, and the actions behind the tiles. Each one
+names the real RPC, the arguments a caller supplies as JSON Schema, and `fixed` arguments
+the caller cannot change. "Keep awake" and "let it sleep" are both `caffeine.set`, with the
+mode fixed. Letting the Mac sleep and sleeping now are marked `disruptive` and are
+confirmed with the user first: an asleep Mac pauses its agents and cannot be reached.
+
+The schemas are rendered from the same zod contracts the handlers parse with
+(`server/capabilities.server.ts`), and the tests prove each operation's arguments,
+merged under its fixed ones, pass the handler's own contract.
+
 ## Things that are the way they are for a reason
 
 **Auto mode needs one request after the daemon starts.** The daemon hands its API to
