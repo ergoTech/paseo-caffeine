@@ -29,7 +29,7 @@ const operation = z.object({
   fixed: z.record(z.string(), z.unknown()).optional(),
   /** Reads only: what "show me Caffeine" means. */
   default: z.boolean().optional(),
-  /** Reads only: the fields of the answer worth reading out; the rest is noise to a listener. */
+  /** The fields of the answer worth reading out; the rest is noise to a listener. */
   output: z.object({ fields: z.array(z.string()) }).optional(),
   /**
    * Actions only. `low` is local and undone with one more call. `disruptive` interrupts running
@@ -76,6 +76,7 @@ const none = z.object({});
 
 // The status keeps everything a person asks about and drops the plumbing: the wake link is
 // a LAN address with no meaning off the home network, and tickAt is the controller's clock.
+// Every action answers with the same status, so it is trimmed the same way.
 const STATUS_FIELDS = ["mode", "until", "active", "busy", "agents", "keepDisplay", "battery", "error"];
 
 export const OPERATIONS: CaffeineOperation[] = [
@@ -99,6 +100,7 @@ export const OPERATIONS: CaffeineOperation[] = [
     description: "Keep the Mac awake until told otherwise. Survives a restart of Paseo.",
     input: none,
     risk: "low",
+    fields: STATUS_FIELDS,
   },
   {
     id: "keep_awake_for",
@@ -109,6 +111,7 @@ export const OPERATIONS: CaffeineOperation[] = [
     description: "Keep the Mac awake for a number of minutes, then let it sleep again. Only 30, 60, 120, 180, 480 or 720 minutes.",
     input: z.object({ minutes: timerMinutes }),
     risk: "low",
+    fields: STATUS_FIELDS,
   },
   {
     id: "auto",
@@ -119,6 +122,7 @@ export const OPERATIONS: CaffeineOperation[] = [
     description: "Keep the Mac awake while any agent is running, and for three minutes after the last one goes quiet.",
     input: none,
     risk: "low",
+    fields: STATUS_FIELDS,
   },
   {
     id: "allow_sleep",
@@ -130,6 +134,7 @@ export const OPERATIONS: CaffeineOperation[] = [
     input: none,
     // Not low: an idle Mac that falls asleep pauses its agents and drops off the relay.
     risk: "disruptive",
+    fields: STATUS_FIELDS,
     confirmText:
       "Stop keeping the Mac awake: it may fall asleep when idle, which pauses the agents, and ChatGPT cannot reach it while it sleeps.",
   },
@@ -141,6 +146,7 @@ export const OPERATIONS: CaffeineOperation[] = [
     description: "true holds the display awake along with the system; false lets the display sleep as usual.",
     input: setOptionsInput.required(),
     risk: "low",
+    fields: STATUS_FIELDS,
   },
   {
     id: "sleep_now",
@@ -150,6 +156,7 @@ export const OPERATIONS: CaffeineOperation[] = [
     description: "Send the Mac to sleep a second after answering, from wherever the user is.",
     input: none,
     risk: "disruptive",
+    fields: STATUS_FIELDS,
     confirmText:
       "Put the Mac to sleep now: the agents pause, and ChatGPT cannot reach the Mac until it is woken, for example with the wake link on the home network.",
   },

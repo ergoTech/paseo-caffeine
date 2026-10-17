@@ -66,8 +66,10 @@ test("letting the Mac sleep and sleeping now are confirmed first", () => {
   assert.equal(byId.keep_awake.confirm, "none");
 });
 
-test("the status leaves out the wake link and the controller clock", () => {
-  const status = describeCaffeine().operations.find((op) => op.id === "status");
-  assert.ok(!status?.output?.fields.includes("wakeUrl"));
-  assert.ok(!status?.output?.fields.includes("tickAt"));
+test("every answer is trimmed to the status a person asks about, without the wake link or the clock", () => {
+  for (const op of describeCaffeine().operations) {
+    assert.ok(op.output?.fields.includes("mode"), `${op.id} keeps the mode`);
+    assert.ok(!op.output?.fields.includes("wakeUrl"), `${op.id} leaves out the wake link`);
+    assert.ok(!op.output?.fields.includes("tickAt"), `${op.id} leaves out the clock`);
+  }
 });
