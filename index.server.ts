@@ -33,7 +33,7 @@ export default function contribute(server: PluginServerContext) {
       });
     },
   });
-  const sleeper = createSleeper();
+  const sleeper = createSleeper({ log: (line) => console.log(line) });
   const controller: Controller = createController({
     read: () => readStored(),
     write: (stored) => writeStored(stored),

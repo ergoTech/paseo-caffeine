@@ -2,6 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createSleeper } from "./sleeper.server.ts";
 
+/**
+ * Waits for the promise chain inside the sleeper to finish, however many links it has.
+ * Counting microtasks here was a trap: adding one `.then()` to the implementation broke
+ * two tests that were otherwise still describing the truth.
+ */
+const settled = () => new Promise((resolve) => setImmediate(resolve));
+
 /** A schedule that hands back the pending callback instead of waiting for a clock. */
 function manualSchedule() {
   const pending: Array<{ fn: () => void; ms: number }> = [];
@@ -44,8 +51,7 @@ test("a pmset that fails leaves its reason behind", async () => {
 
   sleeper.request();
   clock.run();
-  // The rejection is handled a microtask later, which is why the assertion waits.
-  await Promise.resolve();
+  await settled();
   assert.equal(sleeper.error(), "pmset: unable to sleep");
 });
 
@@ -59,13 +65,13 @@ test("a fresh request clears the last failure", async () => {
 
   sleeper.request();
   clock.run();
-  await Promise.resolve();
+  await settled();
   assert.equal(sleeper.error(), "nope");
 
   fail = false;
   sleeper.request();
   assert.equal(sleeper.error(), "", "the stale reason goes as soon as another try begins");
   clock.run();
-  await Promise.resolve();
+  await settled();
   assert.equal(sleeper.error(), "");
 });

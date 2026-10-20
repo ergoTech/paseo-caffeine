@@ -16,6 +16,7 @@ export interface SleeperOptions {
   delayMs?: number;
   run?: (command: string, args: readonly string[]) => Promise<void>;
   schedule?: (fn: () => void, ms: number) => void;
+  log?: (line: string) => void;
 }
 
 function runPmset(command: string, args: readonly string[]): Promise<void> {
@@ -33,17 +34,25 @@ function runPmset(command: string, args: readonly string[]): Promise<void> {
 export function createSleeper(options: SleeperOptions = {}): Sleeper {
   const delayMs = options.delayMs ?? SLEEP_DELAY_MS;
   const run = options.run ?? runPmset;
-  const schedule = options.schedule ?? ((fn, ms) => void setTimeout(fn, ms).unref?.());
+  // Deliberately not unref'd. The timer is the only thing standing between a request and
+  // a suspended Mac, and a timer that does not hold the loop open is a sleep that may
+  // never be asked for.
+  const schedule = options.schedule ?? ((fn, ms) => void setTimeout(fn, ms));
+  const log = options.log ?? (() => undefined);
 
   let failure = "";
 
   return {
     request() {
       failure = "";
+      log(`caffeine: sleeping in ${delayMs} ms`);
       schedule(() => {
-        void run(PMSET, ["sleepnow"]).catch((error: unknown) => {
-          failure = error instanceof Error ? error.message : String(error);
-        });
+        void run(PMSET, ["sleepnow"])
+          .then(() => log("caffeine: pmset sleepnow returned"))
+          .catch((error: unknown) => {
+            failure = error instanceof Error ? error.message : String(error);
+            log(`caffeine: pmset sleepnow failed: ${failure}`);
+          });
       }, delayMs);
     },
 

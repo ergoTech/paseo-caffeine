@@ -153,6 +153,7 @@ export function createController(deps: ControllerDeps): Controller {
      */
     sleep() {
       deps.keeper.release();
+      log(`caffeine: sleep asked for (was ${stored.mode}, hold released)`);
       deps.sleepNow?.();
       return snapshot();
     },
