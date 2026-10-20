@@ -1,8 +1,6 @@
-import type { PaseoApi } from "@getpaseo/client";
-
 export interface AgentsProbe {
   /** Called from every RPC handler; the first call is what makes counting possible. */
-  remember(paseo: PaseoApi): void;
+  remember(paseo: any): void;
   /** Running agents on this host, or null when nothing can be said yet. */
   runningCount(): Promise<number | null>;
   primed(): boolean;
@@ -15,7 +13,7 @@ export interface AgentsProbe {
  * contribution calls caffeine.get as soon as a client connects to close that gap.
  */
 export function createAgentsProbe(): AgentsProbe {
-  let remembered: PaseoApi | null = null;
+  let remembered: any = null;
   return {
     remember(paseo) {
       remembered = paseo;
