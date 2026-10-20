@@ -5,13 +5,14 @@ import { Icon } from "@getpaseo/plugin/client/react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Linking, Pressable, ScrollView, Text, View } from "react-native";
-import { SLEEP_DELAY_MS, type Battery, type SetInput, type SetOptionsInput, type Status, getStatus, setMode, setOptions, sleepNow } from "../shared/caffeine.shared.ts";
+import { SLEEP_DELAY_MS, type Battery, type LidMinutes, type SetInput, type SetOptionsInput, type Status, getStatus, setLid, setMode, setOptions, setupLid, sleepNow } from "../shared/caffeine.shared.ts";
 import { type Strings, detectAppLocale, formatRemaining, t } from "./i18n.ts";
 import { SILENCE_TIMEOUT_MS, type SleepEvent, type SleepPhase, isSleepInFlight, nextSleepPhase } from "./sleep-phase.ts";
 
 const QUERY_KEY = ["caffeine", "status"] as const;
 const TIMER_MINUTES = [30, 60, 120, 180, 480, 720] as const;
 type TimerMinutes = (typeof TIMER_MINUTES)[number];
+const LID_MINUTES: readonly LidMinutes[] = [30, 60, 120];
 
 /**
  * The surface fits a phone without scrolling, and what buys the room is the shape rather
@@ -376,6 +377,76 @@ function useSleepTile(poll: { dataUpdatedAt: number; errorUpdatedAt: number; isE
  * The address is the Mac's own on the local network, so the link only carries from
  * inside the house or through the VPN that puts you there.
  */
+/**
+ * Lid mode's tile: the one switch that changes a system setting rather than holding the Mac
+ * from inside a process, so it always runs on a clock and shows how much is left. Before the
+ * one-time permission is in place it offers that instead, in one press.
+ */
+function LidCard({
+  status,
+  theme,
+  strings,
+  now,
+  busy,
+  onPick,
+  onStop,
+  onSetup,
+}: {
+  status: Status;
+  theme: PluginTheme;
+  strings: Strings;
+  now: number;
+  busy: boolean;
+  onPick(minutes: LidMinutes): void;
+  onStop(): void;
+  onSetup(): void;
+}) {
+  const { lid } = status;
+  const remainingMs = lid.until === "" ? 0 : Math.max(0, Date.parse(lid.until) - now);
+  const lengthMs = lid.minutes * 60_000;
+  const needsSetup = lid.setup === "needs-setup";
+  const detail =
+    needsSetup && !lid.on
+      ? strings.lidSetup
+      : lid.on
+        ? lid.until === ""
+          ? strings.lidOnNoTimer
+          : strings.lidOn(formatRemaining(remainingMs, strings))
+        : strings.lidOff;
+  const failed = lid.error !== "" && lid.error !== "needs-setup" ? strings.lidFailed(lid.error) : "";
+
+  return (
+    <View style={{ flexDirection: "row" }}>
+      <ModeCard icon={lid.on ? "LaptopMinimalCheck" : "LaptopMinimal"} title={strings.lidLabel} detail={detail} selected={lid.on} theme={theme} tile="100%">
+        {lid.on && lid.until !== "" && lengthMs > 0 ? (
+          <View style={{ height: 3, borderRadius: 2, backgroundColor: theme.colors.border, overflow: "hidden", marginTop: 4 }}>
+            <View style={{ height: 3, backgroundColor: theme.colors.accent, width: `${Math.min(100, Math.round((remainingMs / lengthMs) * 100))}%` }} />
+          </View>
+        ) : null}
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 4, flexWrap: "wrap", opacity: busy ? 0.6 : 1 }}>
+          {/* Presses are ignored while one is in flight: a "turn off" overtaken by a "turn on" is
+              exactly the mix-up this tile cannot afford. */}
+          {needsSetup ? (
+            <Chip label={strings.lidSetupButton} selected={false} theme={theme} onPress={() => (busy ? undefined : onSetup())} />
+          ) : (
+            LID_MINUTES.map((minutes) => (
+              <Chip
+                key={minutes}
+                label={formatRemaining(minutes * 60_000, strings)}
+                selected={lid.on && lid.minutes === minutes}
+                theme={theme}
+                onPress={() => (busy ? undefined : onPick(minutes))}
+              />
+            ))
+          )}
+          {lid.on ? <Chip label={strings.lidStop} selected={false} theme={theme} onPress={() => (busy ? undefined : onStop())} /> : null}
+        </View>
+        {failed !== "" ? <Text style={{ color: theme.colors.statusDanger ?? theme.colors.foregroundMuted, fontSize: 12 }}>{failed}</Text> : null}
+      </ModeCard>
+    </View>
+  );
+}
+
 function WakeLink({ url, theme, strings }: { url: string; theme: PluginTheme; strings: Strings }) {
   if (!url) {
     return <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, textAlign: "center" }}>{strings.wakeMissing}</Text>;
@@ -402,6 +473,8 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
   const applyMode = useRpc(setMode);
   const applyOptions = useRpc(setOptions);
   const askSleep = useRpc(sleepNow);
+  const askLid = useRpc(setLid);
+  const askLidSetup = useRpc(setupLid);
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError, dataUpdatedAt, errorUpdatedAt } = useQuery({
@@ -419,6 +492,17 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
 
   const changeOptions = useMutation({
     mutationFn: (patch: SetOptionsInput) => applyOptions(patch),
+    onSuccess: (status) => queryClient.setQueryData(QUERY_KEY, status),
+  });
+
+  const lid = useMutation({
+    mutationFn: (input: Parameters<typeof askLid>[0]) => askLid(input),
+    onSuccess: (status) => queryClient.setQueryData(QUERY_KEY, status),
+  });
+
+  // The password dialog shows on the Mac and waits for a person, so this one can take minutes.
+  const lidSetupRun = useMutation({
+    mutationFn: () => askLidSetup({}),
     onSuccess: (status) => queryClient.setQueryData(QUERY_KEY, status),
   });
 
@@ -571,6 +655,17 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
               ) : null}
             </ModeCard>
           </View>
+
+          <LidCard
+            status={data}
+            theme={theme}
+            strings={strings}
+            now={now}
+            busy={lid.isPending || lidSetupRun.isPending}
+            onPick={(minutes) => lid.mutate({ lid: "on", minutes })}
+            onStop={() => lid.mutate({ lid: "off" })}
+            onSetup={() => lidSetupRun.mutate()}
+          />
 
           <WakeLink url={data.wakeUrl} theme={theme} strings={strings} />
         </>

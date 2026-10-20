@@ -2,6 +2,7 @@ import type { PluginClientContext } from "@getpaseo/plugin/client";
 import { getStatus, setMode, setOptions, sleepNow } from "./shared/caffeine.shared.ts";
 import { detectAppLocale, t } from "./client/i18n.ts";
 import { CaffeineSurface } from "./client/main.client.tsx";
+import { contributeLidAlert } from "./client/lid-alert.tsx";
 
 export default function contribute(client: PluginClientContext) {
   // Paseo's own language, not the device's: these titles are fixed here, at registration,
@@ -74,7 +75,11 @@ export default function contribute(client: PluginClientContext) {
   // opened the surface.
   void client.rpc(getStatus, {}).catch(() => undefined);
 
+  // A warning in every workspace's header while lid mode keeps the Mac from sleeping.
+  const removeLidAlert = contributeLidAlert(client);
+
   return () => {
+    removeLidAlert();
     void removeSidebarItem?.();
   };
 }
