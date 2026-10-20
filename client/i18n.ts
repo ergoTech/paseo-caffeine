@@ -34,6 +34,16 @@ export interface Strings {
   lidSetupButton: string;
   lidStop: string;
   lidFailed(message: string): string;
+  /** Session warm-up. `time` is "HH:MM"; `fresh` is when the window would reset. */
+  warmupLabel: string;
+  warmupOn(time: string, fresh: string): string;
+  warmupOff: string;
+  warmupEnable: string;
+  warmupDisable: string;
+  warmupNow: string;
+  warmupRunning: string;
+  warmupLast(at: string, results: string): string;
+  warmupNone: string;
   /** The header alert while lid mode is on. */
   lidAlertTitle: string;
   lidAlertLabel(remaining: string): string;
@@ -101,6 +111,15 @@ const en: Strings = {
   lidSetupButton: "Allow on this Mac",
   lidStop: "Turn off",
   lidFailed: (message) => `Did not work: ${message}`,
+  warmupLabel: "Session warm-up",
+  warmupOn: (time, fresh) => `Every day at ${time} one short Haiku message per Claude account starts its 5-hour window, so it resets at ${fresh}. Only while the Mac is awake.`,
+  warmupOff: "Off. Start each account's 5-hour window early, so it resets partway into your day.",
+  warmupEnable: "Turn on",
+  warmupDisable: "Turn off",
+  warmupNow: "Warm up now",
+  warmupRunning: "Warming up…",
+  warmupLast: (at, results) => `Last: ${at} · ${results}`,
+  warmupNone: "no logged-in accounts",
   lidAlertTitle: "Lid mode is on: this Mac will not sleep. Press to turn it off",
   lidAlertLabel: (remaining) => `Lid · ${remaining}`,
   lidAlertLabelNoTimer: "Lid · no sleep",
@@ -162,6 +181,15 @@ const ru: Strings = {
   lidSetupButton: "Разрешить на этом Mac",
   lidStop: "Выключить",
   lidFailed: (message) => `Не вышло: ${message}`,
+  warmupLabel: "Прогрев сессии",
+  warmupOn: (time, fresh) => `Каждый день в ${time} одно короткое сообщение Haiku на каждый аккаунт Claude запускает его 5-часовое окно, и оно сбросится в ${fresh}. Только пока Mac не спит.`,
+  warmupOff: "Выключен. Запускает 5-часовое окно каждого аккаунта заранее, чтобы оно сбросилось посреди рабочего дня.",
+  warmupEnable: "Включить",
+  warmupDisable: "Выключить",
+  warmupNow: "Прогреть сейчас",
+  warmupRunning: "Прогреваю…",
+  warmupLast: (at, results) => `Последний: ${at} · ${results}`,
+  warmupNone: "нет аккаунтов со входом",
   lidAlertTitle: "Режим крышки включён: Mac не заснёт. Нажми, чтобы выключить",
   lidAlertLabel: (remaining) => `Крышка · ${remaining}`,
   lidAlertLabelNoTimer: "Крышка · без сна",
@@ -223,6 +251,15 @@ const uk: Strings = {
   lidSetupButton: "Дозволити на цьому Mac",
   lidStop: "Вимкнути",
   lidFailed: (message) => `Не вийшло: ${message}`,
+  warmupLabel: "Прогрів сесії",
+  warmupOn: (time, fresh) => `Щодня о ${time} одне коротке повідомлення Haiku на кожен акаунт Claude запускає його 5-годинне вікно, і воно скинеться о ${fresh}. Лише поки Mac не спить.`,
+  warmupOff: "Вимкнено. Запускає 5-годинне вікно кожного акаунта заздалегідь, щоб воно скинулось посеред робочого дня.",
+  warmupEnable: "Увімкнути",
+  warmupDisable: "Вимкнути",
+  warmupNow: "Прогріти зараз",
+  warmupRunning: "Прогріваю…",
+  warmupLast: (at, results) => `Останній: ${at} · ${results}`,
+  warmupNone: "немає акаунтів із входом",
   lidAlertTitle: "Режим кришки ввімкнено: Mac не засне. Натисни, щоб вимкнути",
   lidAlertLabel: (remaining) => `Кришка · ${remaining}`,
   lidAlertLabelNoTimer: "Кришка · без сну",

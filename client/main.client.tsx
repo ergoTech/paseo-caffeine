@@ -5,7 +5,7 @@ import { Icon } from "@getpaseo/plugin/client/react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Linking, Pressable, ScrollView, Text, View } from "react-native";
-import { SLEEP_DELAY_MS, type Battery, type LidMinutes, type SetInput, type SetOptionsInput, type Status, getStatus, setLid, setMode, setOptions, setupLid, sleepNow } from "../shared/caffeine.shared.ts";
+import { SLEEP_DELAY_MS, type Battery, type LidMinutes, type SetInput, type SetOptionsInput, type Status, getStatus, runWarmup, setLid, setMode, setOptions, setWarmup, setupLid, sleepNow } from "../shared/caffeine.shared.ts";
 import { type Strings, detectAppLocale, formatRemaining, t } from "./i18n.ts";
 import { SILENCE_TIMEOUT_MS, type SleepEvent, type SleepPhase, isSleepInFlight, nextSleepPhase } from "./sleep-phase.ts";
 
@@ -447,6 +447,66 @@ function LidCard({
   );
 }
 
+/** "HH:MM" moved by `minutes`, wrapping round midnight. */
+function shiftTime(time: string, minutes: number): string {
+  const [hours, mins] = time.split(":").map(Number);
+  const total = ((((hours ?? 0) * 60 + (mins ?? 0) + minutes) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/** A local clock time, "HH:MM", for an RFC 3339 instant. */
+function clockOf(iso: string): string {
+  const at = new Date(iso);
+  return `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
+}
+
+/**
+ * Session warm-up's tile: the hour (half-hour steps), on/off, and a press to warm up now. The
+ * detail says when the window will reset, five hours after the hour.
+ */
+function WarmupCard({
+  status,
+  theme,
+  strings,
+  busy,
+  onSet,
+  onRun,
+}: {
+  status: Status;
+  theme: PluginTheme;
+  strings: Strings;
+  busy: boolean;
+  onSet(patch: { enabled?: boolean; time?: string }): void;
+  onRun(): void;
+}) {
+  const { warmup } = status;
+  const detail = warmup.enabled ? strings.warmupOn(warmup.time, shiftTime(warmup.time, 300)) : strings.warmupOff;
+  const results =
+    warmup.results.length === 0 ? strings.warmupNone : warmup.results.map((r) => `${r.login} ${r.ok ? "✓" : `✗ ${r.error}`}`).join(" · ");
+  const ignoreWhileBusy = (action: () => void) => () => (busy || warmup.running ? undefined : action());
+  return (
+    <View style={{ flexDirection: "row" }}>
+      <ModeCard icon="Sunrise" title={strings.warmupLabel} detail={detail} selected={warmup.enabled} theme={theme} tile="100%">
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 4, flexWrap: "wrap", alignItems: "center", opacity: busy ? 0.6 : 1 }}>
+          <Chip label="−" selected={false} theme={theme} onPress={ignoreWhileBusy(() => onSet({ time: shiftTime(warmup.time, -30) }))} />
+          <Text style={{ color: theme.colors.foreground, fontSize: 15, fontWeight: "600", minWidth: 48, textAlign: "center" }}>{warmup.time}</Text>
+          <Chip label="+" selected={false} theme={theme} onPress={ignoreWhileBusy(() => onSet({ time: shiftTime(warmup.time, 30) }))} />
+          <Chip
+            label={warmup.enabled ? strings.warmupDisable : strings.warmupEnable}
+            selected={warmup.enabled}
+            theme={theme}
+            onPress={ignoreWhileBusy(() => onSet({ enabled: !warmup.enabled }))}
+          />
+          <Chip label={warmup.running ? strings.warmupRunning : strings.warmupNow} selected={false} theme={theme} onPress={ignoreWhileBusy(onRun)} />
+        </View>
+        {warmup.lastAt !== "" ? (
+          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{strings.warmupLast(clockOf(warmup.lastAt), results)}</Text>
+        ) : null}
+      </ModeCard>
+    </View>
+  );
+}
+
 function WakeLink({ url, theme, strings }: { url: string; theme: PluginTheme; strings: Strings }) {
   if (!url) {
     return <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, textAlign: "center" }}>{strings.wakeMissing}</Text>;
@@ -474,6 +534,8 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
   const applyOptions = useRpc(setOptions);
   const askSleep = useRpc(sleepNow);
   const askLid = useRpc(setLid);
+  const askWarmup = useRpc(setWarmup);
+  const askWarmupNow = useRpc(runWarmup);
   const askLidSetup = useRpc(setupLid);
   const queryClient = useQueryClient();
 
@@ -497,6 +559,17 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
 
   const lid = useMutation({
     mutationFn: (input: Parameters<typeof askLid>[0]) => askLid(input),
+    onSuccess: (status) => queryClient.setQueryData(QUERY_KEY, status),
+  });
+
+  const warmupSet = useMutation({
+    mutationFn: (patch: { enabled?: boolean; time?: string }) => askWarmup(patch),
+    onSuccess: (status) => queryClient.setQueryData(QUERY_KEY, status),
+  });
+
+  // Answers once every login has been warmed up: seconds per account.
+  const warmupRun = useMutation({
+    mutationFn: () => askWarmupNow({}),
     onSuccess: (status) => queryClient.setQueryData(QUERY_KEY, status),
   });
 
@@ -665,6 +738,15 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
             onPick={(minutes) => lid.mutate({ lid: "on", minutes })}
             onStop={() => lid.mutate({ lid: "off" })}
             onSetup={() => lidSetupRun.mutate()}
+          />
+
+          <WarmupCard
+            status={data}
+            theme={theme}
+            strings={strings}
+            busy={warmupSet.isPending || warmupRun.isPending}
+            onSet={(patch) => warmupSet.mutate(patch)}
+            onRun={() => warmupRun.mutate()}
           />
 
           <WakeLink url={data.wakeUrl} theme={theme} strings={strings} />

@@ -44,6 +44,19 @@ export const lidStatus = z.object({
   error: z.string().default(""),
 });
 
+/** Session warm-up: a tiny Haiku message per Claude login at a set hour. */
+export const warmupStatus = z.object({
+  enabled: z.boolean().default(false),
+  /** Local time of day, "HH:MM". */
+  time: z.string().default("06:00"),
+  /** The next scheduled warm-up, RFC 3339, or "" when off. */
+  nextAt: z.string().default(""),
+  /** The last warm-up, scheduled or by hand, RFC 3339, or "". */
+  lastAt: z.string().default(""),
+  results: z.array(z.object({ login: z.string(), ok: z.boolean(), error: z.string().default("") })).default([]),
+  running: z.boolean().default(false),
+});
+
 /** What every client sees. `until` and `tickAt` are RFC 3339 or empty. */
 export const status = z.object({
   mode,
@@ -64,6 +77,7 @@ export const status = z.object({
   wakeUrl: z.string().default(""),
   battery: battery.nullable().default(null),
   lid: lidStatus.default({ on: false, until: "", minutes: 0, setup: "unknown", error: "" }),
+  warmup: warmupStatus.default({ enabled: false, time: "06:00", nextAt: "", lastAt: "", results: [], running: false }),
 });
 
 export const setInput = z.discriminatedUnion("mode", [
@@ -86,6 +100,7 @@ export type Battery = z.output<typeof battery>;
 export type LidMinutes = z.output<typeof lidMinutes>;
 export type LidSetup = z.output<typeof lidSetup>;
 export type LidStatus = z.output<typeof lidStatus>;
+export type WarmupStatus = z.output<typeof warmupStatus>;
 
 export const getStatus = defineRpc({
   name: "caffeine.get",
@@ -144,6 +159,23 @@ export const setLid = defineRpc({
 /** The one-time permission for lid mode, through macOS's own password dialog on the Mac. */
 export const setupLid = defineRpc({
   name: "caffeine.lid-setup",
+  input: z.object({}),
+  output: status,
+});
+
+/** Turns the warm-up on or off, or moves its hour. */
+export const setWarmup = defineRpc({
+  name: "caffeine.warmup",
+  input: z.object({
+    enabled: z.boolean().optional(),
+    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+  }),
+  output: status,
+});
+
+/** Warms every login up now, whatever the schedule; answers once it is done. */
+export const runWarmup = defineRpc({
+  name: "caffeine.warmup-now",
   input: z.object({}),
   output: status,
 });

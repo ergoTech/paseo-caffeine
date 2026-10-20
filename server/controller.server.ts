@@ -1,4 +1,4 @@
-import type { Battery, LidStatus, SetInput, SetOptionsInput, Status } from "../shared/caffeine.shared.ts";
+import type { Battery, LidStatus, SetInput, SetOptionsInput, Status, WarmupStatus } from "../shared/caffeine.shared.ts";
 import type { Keeper } from "./keeper.server.ts";
 import { TICK_MS, type Stored, decide, defaultStored, nextBusyUntil, untilForMinutes } from "./policy.ts";
 
@@ -15,6 +15,8 @@ export interface ControllerDeps {
   sleepNow?(): void;
   /** Lid mode, checked on the same tick; absent in tests that do not touch it. */
   lid?: { tick(battery: Battery | null): Promise<void>; status(): LidStatus };
+  /** Session warm-up, checked on the same tick; absent in tests that do not touch it. */
+  warmup?: { tick(): Promise<void>; status(): WarmupStatus };
   now?: () => number;
   tickMs?: number;
   log?: (line: string) => void;
@@ -63,6 +65,7 @@ export function createController(deps: ControllerDeps): Controller {
       wakeUrl: deps.wakeUrl?.() ?? "",
       battery,
       lid: deps.lid?.status() ?? { on: false, until: "", minutes: 0, setup: "unknown", error: "" },
+      warmup: deps.warmup?.status() ?? { enabled: false, time: "06:00", nextAt: "", lastAt: "", results: [], running: false },
     };
   }
 
@@ -75,6 +78,9 @@ export function createController(deps: ControllerDeps): Controller {
     if (deps.readBattery) battery = await deps.readBattery();
     // Lid mode ends at its deadline or on a low battery whatever the mode says.
     if (deps.lid) await deps.lid.tick(battery).catch((failure) => log(`caffeine: lid check failed: ${String(failure)}`));
+    // Not awaited: a warm-up runs `claude` once per login, which takes seconds, and the tick
+    // that decides whether the Mac stays awake must not wait on it.
+    if (deps.warmup) void deps.warmup.tick().catch((failure) => log(`caffeine: warm-up failed: ${String(failure)}`));
     busyUntil = nextBusyUntil(busyUntil, running, nowMs);
 
     const decision = decide(stored, nowMs, busyUntil);

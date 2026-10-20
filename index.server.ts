@@ -1,6 +1,7 @@
 import { hostname } from "node:os";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
-import { getStatus, setLid, setMode, setOptions, setupLid, sleepNow } from "./shared/caffeine.shared.ts";
+import { getStatus, runWarmup, setLid, setMode, setOptions, setWarmup, setupLid, sleepNow } from "./shared/caffeine.shared.ts";
+import { createWarmup, systemWarmupDeps } from "./server/warmup.server.ts";
 import { createLid, systemLidDeps } from "./server/lid.server.ts";
 import { createAgentsProbe } from "./server/agents.server.ts";
 import { createBatteryProbe } from "./server/battery.server.ts";
@@ -36,6 +37,7 @@ export default function contribute(server: PluginServerContext) {
   });
   const sleeper = createSleeper({ log: (line) => console.log(line) });
   const lid = createLid(systemLidDeps((line) => console.log(line)));
+  const warmup = createWarmup(systemWarmupDeps((line) => console.log(line)));
   const controller: Controller = createController({
     read: () => readStored(),
     write: (stored) => writeStored(stored),
@@ -45,6 +47,7 @@ export default function contribute(server: PluginServerContext) {
     wakeUrl: () => waker.url(),
     sleepNow: () => sleeper.request(),
     lid,
+    warmup,
     log: (line) => console.log(line),
   });
 
@@ -58,6 +61,8 @@ export default function contribute(server: PluginServerContext) {
     started ??= lid
       .start()
       .catch((error) => console.error(`caffeine: lid start failed: ${String(error)}`))
+      .then(() => warmup.start())
+      .catch((error) => console.error(`caffeine: warm-up start failed: ${String(error)}`))
       .then(() => waker.start())
       .then(() => controller.start());
     return started.then(() => controller);
@@ -105,6 +110,20 @@ export default function contribute(server: PluginServerContext) {
     probe.remember(paseo);
     const instance = await startedServer();
     await lid.setup();
+    return instance.status();
+  });
+
+  server.handle(setWarmup, async (input, { paseo }) => {
+    probe.remember(paseo);
+    const instance = await startedServer();
+    await warmup.set(input);
+    return instance.status();
+  });
+
+  server.handle(runWarmup, async (_input, { paseo }) => {
+    probe.remember(paseo);
+    const instance = await startedServer();
+    await warmup.runNow();
     return instance.status();
   });
 
