@@ -12,10 +12,12 @@ import {
   setupScript,
   sudoersRule,
   thermalWarning,
+  parseLidClosed,
+  externalDisplay,
 } from "./lid.server.ts";
 
 const T0 = Date.parse("2026-10-20T12:00:00Z");
-const OFF: LidStored = { until: "", minutes: 0, forever: false };
+const OFF: LidStored = { until: "", minutes: 0, forever: false, darkWhenClosed: true };
 
 /** A Mac in miniature: the sudo rule, the SleepDisabled switch, the guard, and every call. */
 function fakeMac(
@@ -28,6 +30,8 @@ function fakeMac(
     guardFails?: boolean;
     unreadable?: boolean;
     hot?: () => boolean;
+    lidClosed?: () => boolean;
+    external?: boolean;
     admin?: () => Promise<void>;
   } = {},
 ) {
@@ -42,6 +46,14 @@ function fakeMac(
     run: async (command, args) => {
       const line = [command, ...args].join(" ");
       if (line === "/usr/bin/sudo -n -l /usr/bin/pmset -a disablesleep 1") return { code: ready ? 0 : 1, stdout: "" };
+      if (line === "/usr/sbin/system_profiler SPDisplaysDataType -json") {
+        const internal = { spdisplays_connection_type: "spdisplays_internal" };
+        const ndrvs = options.external ? [internal, { spdisplays_connection_type: "spdisplays_displayport" }] : [internal];
+        return { code: 0, stdout: JSON.stringify({ SPDisplaysDataType: [{ spdisplays_ndrvs: ndrvs }] }) };
+      }
+      if (line === "/usr/sbin/ioreg -r -k AppleClamshellState -d 4") {
+        return { code: 0, stdout: `  |   "AppleClamshellState" = ${options.lidClosed?.() ? "Yes" : "No"}\n` };
+      }
       if (line === "/usr/bin/pmset -g therm") {
         return { code: 0, stdout: options.hot?.() ? "CPU_Speed_Limit \t= 70\n" : "Note: No thermal warning level has been recorded\n" };
       }
@@ -157,7 +169,7 @@ test("turning it on arms the guard before switching sleep off, and records the d
   await lid.start();
   await lid.enable(30);
   assert.deepEqual(mac.calls, [`guard ${at(T0 + 31 * 60_000)}`, "/usr/bin/sudo -n /usr/bin/pmset -a disablesleep 1"]);
-  assert.deepEqual(mac.stored(), { until: at(T0 + 30 * 60_000), minutes: 30, forever: false });
+  assert.deepEqual(mac.stored(), { until: at(T0 + 30 * 60_000), minutes: 30, forever: false, darkWhenClosed: true });
   assert.equal(lid.status().on, true);
   assert.equal(lid.status().minutes, 30);
 });
@@ -231,7 +243,7 @@ test("a low battery ends it early, the charger does not", async () => {
 });
 
 test("a deadline that passed while Paseo was down is put right on start", async () => {
-  const mac = fakeMac({ disabled: true, stored: { until: at(T0 - 1), minutes: 30, forever: false } });
+  const mac = fakeMac({ disabled: true, stored: { until: at(T0 - 1), minutes: 30, forever: false, darkWhenClosed: true } });
   const lid = createLid(mac.deps);
   await lid.start();
   assert.equal(mac.disabled(), false);
@@ -240,7 +252,7 @@ test("a deadline that passed while Paseo was down is put right on start", async 
 });
 
 test("a deadline still ahead on start re-arms the guard, as after a reboot", async () => {
-  const mac = fakeMac({ disabled: true, stored: { until: at(T0 + 10 * 60_000), minutes: 30, forever: false } });
+  const mac = fakeMac({ disabled: true, stored: { until: at(T0 + 10 * 60_000), minutes: 30, forever: false, darkWhenClosed: true } });
   const lid = createLid(mac.deps);
   await lid.start();
   assert.deepEqual(mac.calls, [`guard ${at(T0 + 11 * 60_000)}`]);
@@ -248,7 +260,7 @@ test("a deadline still ahead on start re-arms the guard, as after a reboot", asy
 });
 
 test("a deadline that does not parse counts as due", async () => {
-  const mac = fakeMac({ disabled: true, stored: { until: "garbage", minutes: 30, forever: false } });
+  const mac = fakeMac({ disabled: true, stored: { until: "garbage", minutes: 30, forever: false, darkWhenClosed: true } });
   const lid = createLid(mac.deps);
   await lid.start();
   assert.equal(mac.disabled(), false);
@@ -264,7 +276,7 @@ test("sleep switched back on by hand ends the timing; an unreadable state does n
   assert.deepEqual(mac.stored(), OFF);
   assert.equal(mac.guard(), null);
 
-  const blind = fakeMac({ disabled: true, unreadable: true, stored: { until: at(T0 + 10 * 60_000), minutes: 30, forever: false } });
+  const blind = fakeMac({ disabled: true, unreadable: true, stored: { until: at(T0 + 10 * 60_000), minutes: 30, forever: false, darkWhenClosed: true } });
   const unknown = createLid(blind.deps);
   await unknown.start();
   await unknown.tick(null);
@@ -278,7 +290,7 @@ test("a turn-off overtaken by a turn-on runs in order: the new deadline survives
   await lid.enable(30);
   await Promise.all([lid.disable("turned off"), lid.enable(120)]);
   assert.equal(mac.disabled(), true);
-  assert.deepEqual(mac.stored(), { until: at(T0 + 120 * 60_000), minutes: 120, forever: false });
+  assert.deepEqual(mac.stored(), { until: at(T0 + 120 * 60_000), minutes: 120, forever: false, darkWhenClosed: true });
   assert.equal(mac.guard(), T0 + 121 * 60_000);
 });
 
@@ -336,7 +348,7 @@ test("always: sleep is switched off with no deadline and no guard, and time neve
   await lid.start();
   await lid.enable("forever");
   assert.deepEqual(mac.calls, ["/usr/bin/sudo -n /usr/bin/pmset -a disablesleep 1", "stop guard"], "sleep off first, then the old guard goes");
-  assert.deepEqual(mac.stored(), { until: "", minutes: 0, forever: true });
+  assert.deepEqual(mac.stored(), { until: "", minutes: 0, forever: true, darkWhenClosed: true });
   assert.equal(mac.guard(), null);
   mac.advance(30 * 24 * 60 * 60_000);
   await lid.tick(onBattery(80));
@@ -375,14 +387,14 @@ test("heat ends a timed lid mode too", async () => {
 });
 
 test("always survives a restart; one switched off by hand meanwhile is let go", async () => {
-  const kept = fakeMac({ disabled: true, stored: { until: "", minutes: 0, forever: true } });
+  const kept = fakeMac({ disabled: true, stored: { until: "", minutes: 0, forever: true, darkWhenClosed: true } });
   const lid = createLid(kept.deps);
   await lid.start();
   assert.equal(kept.disabled(), true);
   assert.deepEqual(kept.calls, [], "no guard, nothing restored");
   assert.equal(lid.status().forever, true);
 
-  const offByHand = fakeMac({ disabled: false, stored: { until: "", minutes: 0, forever: true } });
+  const offByHand = fakeMac({ disabled: false, stored: { until: "", minutes: 0, forever: true, darkWhenClosed: true } });
   await createLid(offByHand.deps).start();
   assert.deepEqual(offByHand.stored(), OFF);
 });
@@ -432,4 +444,72 @@ test("a failed switch from a timer to always keeps the timer's guard", async () 
   await lid.enable("forever");
   assert.notEqual(mac.guard(), null);
   assert.equal(mac.stored().forever, false);
+});
+
+test("the lid's state is read from ioreg", () => {
+  assert.equal(parseLidClosed('  |   "AppleClamshellState" = Yes\n'), true);
+  assert.equal(parseLidClosed('  |   "AppleClamshellState" = No\n'), false);
+  assert.equal(parseLidClosed(""), null);
+});
+
+test("closing the lid puts the display to sleep once, while lid mode is on", async () => {
+  let closed = false;
+  const mac = fakeMac({ lidClosed: () => closed });
+  const lid = createLid(mac.deps);
+  await lid.start();
+  await lid.enable("forever");
+  const darkened = () => mac.calls.filter((call) => call.endsWith("displaysleepnow")).length;
+  await lid.checkClosed();
+  assert.equal(darkened(), 0, "open: nothing");
+  closed = true;
+  await lid.checkClosed();
+  await lid.checkClosed();
+  assert.equal(darkened(), 1, "once per closing, not every minute");
+  closed = false;
+  await lid.checkClosed();
+  closed = true;
+  await lid.checkClosed();
+  assert.equal(darkened(), 2, "closed again: once more");
+});
+
+test("the display is left alone when lid mode is off or the switch is off", async () => {
+  const off = fakeMac({ lidClosed: () => true });
+  const idle = createLid(off.deps);
+  await idle.start();
+  await idle.checkClosed();
+  assert.ok(!off.calls.some((call) => call.endsWith("displaysleepnow")), "lid mode off: macOS sleeps the Mac anyway");
+
+  let closed = false;
+  const mac = fakeMac({ lidClosed: () => closed });
+  const lid = createLid(mac.deps);
+  await lid.start();
+  await lid.enable("forever");
+  await lid.setDarkWhenClosed(false);
+  closed = true;
+  await lid.checkClosed();
+  assert.ok(!mac.calls.some((call) => call.endsWith("displaysleepnow")));
+  await lid.disable("turned off");
+  assert.equal(mac.stored().darkWhenClosed, false, "the choice outlives the session");
+});
+
+test("an external monitor keeps the screen on: displaysleepnow would blank it too", async () => {
+  assert.equal(externalDisplay(JSON.stringify({ SPDisplaysDataType: [{ spdisplays_ndrvs: [{ spdisplays_connection_type: "spdisplays_internal" }] }] })), false);
+  assert.equal(externalDisplay("not json"), true, "unreadable counts as external");
+  assert.equal(externalDisplay(JSON.stringify({ SPDisplaysDataType: [] })), true);
+  const mac = fakeMac({ lidClosed: () => true, external: true });
+  const lid = createLid(mac.deps);
+  await lid.start();
+  await lid.enable("forever");
+  await lid.checkClosed();
+  assert.ok(!mac.calls.some((call) => call.endsWith("displaysleepnow")));
+});
+
+test("turning lid mode on with the lid already shut puts the display to sleep on the next check", async () => {
+  const mac = fakeMac({ lidClosed: () => true });
+  const lid = createLid(mac.deps);
+  await lid.start();
+  await lid.checkClosed();
+  await lid.enable("forever");
+  await lid.checkClosed();
+  assert.equal(mac.calls.filter((call) => call.endsWith("displaysleepnow")).length, 1);
 });

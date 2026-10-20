@@ -43,6 +43,8 @@ export const lidStatus = z.object({
   forever: z.boolean().default(false),
   /** Why lid mode last ended by itself ("battery", "heat"), or "". */
   ended: z.enum(["", "battery", "heat"]).default(""),
+  /** Whether the display goes to sleep when the lid closes while lid mode is on. */
+  darkWhenClosed: z.boolean().default(true),
   setup: lidSetup.default("unknown"),
   /** "needs-setup", a failed command's message, or "". */
   error: z.string().default(""),
@@ -67,7 +69,7 @@ export const status = z.object({
    */
   wakeUrl: z.string().default(""),
   battery: battery.nullable().default(null),
-  lid: lidStatus.default({ on: false, until: "", minutes: 0, forever: false, ended: "", setup: "unknown", error: "" }),
+  lid: lidStatus.default({ on: false, until: "", minutes: 0, forever: false, ended: "", darkWhenClosed: true, setup: "unknown", error: "" }),
 });
 
 export const setInput = z.discriminatedUnion("mode", [
@@ -150,5 +152,12 @@ export const setLid = defineRpc({
 export const setupLid = defineRpc({
   name: "caffeine.lid-setup",
   input: z.object({}),
+  output: status,
+});
+
+/** Lid mode's display option: put the display to sleep when the lid closes. */
+export const setLidDisplay = defineRpc({
+  name: "caffeine.lid-display",
+  input: z.object({ darkWhenClosed: z.boolean() }),
   output: status,
 });

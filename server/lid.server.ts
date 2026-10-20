@@ -21,6 +21,8 @@ import type { Battery, LidSetup, LidStatus } from "../shared/caffeine.shared.ts"
  */
 
 const PMSET = "/usr/bin/pmset";
+const IOREG = "/usr/sbin/ioreg";
+const PROFILER = "/usr/sbin/system_profiler";
 const SUDO = "/usr/bin/sudo";
 export const SUDOERS_FILE = "/etc/sudoers.d/paseo-caffeine";
 export const LID_FILE = join(homedir(), ".jobby-jobs", "caffeine-lid.json");
@@ -101,15 +103,41 @@ export interface LidStored {
   minutes: number;
   /** On with no end: only a person, a low battery or heat turns it off. */
   forever: boolean;
+  /** Whether the display is put to sleep when the lid closes while lid mode is on. A choice
+   *  that outlives any one session, so turning lid mode off keeps it. */
+  darkWhenClosed: boolean;
 }
 
-const OFF_STATE: LidStored = { until: "", minutes: 0, forever: false };
+const OFF_STATE: LidStored = { until: "", minutes: 0, forever: false, darkWhenClosed: true };
 
 const lidStored = z.object({
   until: z.string().default(""),
   minutes: z.number().int().nonnegative().default(0),
   forever: z.boolean().default(false),
+  darkWhenClosed: z.boolean().default(true),
 });
+
+/**
+ * Whether `system_profiler SPDisplaysDataType -json` lists a display other than the built-in
+ * one. `displaysleepnow` sleeps every display, so with a monitor in use the lid is left alone.
+ * Output that cannot be read counts as external: leaving a lit panel beats blanking a monitor.
+ */
+export function externalDisplay(json: string): boolean {
+  try {
+    const parsed = JSON.parse(json) as { SPDisplaysDataType?: Array<{ spdisplays_ndrvs?: Array<{ spdisplays_connection_type?: string }> }> };
+    const displays = (parsed.SPDisplaysDataType ?? []).flatMap((gpu) => gpu.spdisplays_ndrvs ?? []);
+    if (displays.length === 0) return true;
+    return displays.some((display) => display.spdisplays_connection_type !== "spdisplays_internal");
+  } catch {
+    return true;
+  }
+}
+
+/** `"AppleClamshellState" = Yes` in `ioreg -r -k AppleClamshellState`; null when not there. */
+export function parseLidClosed(output: string): boolean | null {
+  const match = /"AppleClamshellState"\s*=\s*(Yes|No)/.exec(output);
+  return match ? match[1] === "Yes" : null;
+}
 
 /**
  * Whether `pmset -g therm` reports the Mac running hot: a thermal or performance warning level
@@ -173,6 +201,10 @@ export interface Lid {
   enable(minutes: number | "forever"): Promise<void>;
   disable(why: string): Promise<void>;
   setup(): Promise<void>;
+  /** Puts the display to sleep when the lid has just closed while lid mode is on. Once per
+   *  closing: a lid that stays closed is not asked again. */
+  checkClosed(): Promise<void>;
+  setDarkWhenClosed(value: boolean): Promise<void>;
   status(): LidStatus;
 }
 
@@ -221,6 +253,9 @@ export function createLid(deps: LidDeps): Lid {
     await deps.write(stored);
   }
 
+  /** The lid as last seen, so the display is put to sleep once per closing. */
+  let wasClosed = false;
+
   /** Why lid mode last ended on its own, for the tile; cleared when it is turned on again. */
   let ended: "" | "battery" | "heat" = "";
 
@@ -250,7 +285,7 @@ export function createLid(deps: LidDeps): Lid {
     }
     error = "";
     await deps.stopGuard().catch(() => undefined);
-    await save({ ...OFF_STATE });
+    await save({ ...OFF_STATE, darkWhenClosed: stored.darkWhenClosed });
     log(`caffeine: lid mode off (${why})`);
   }
 
@@ -263,7 +298,7 @@ export function createLid(deps: LidDeps): Lid {
         if (!running()) return;
         if (stored.forever) {
           // Turned back on while Paseo was down: nothing to keep.
-          if (on === false) await save({ ...OFF_STATE });
+          if (on === false) await save({ ...OFF_STATE, darkWhenClosed: stored.darkWhenClosed });
           return;
         }
         // A deadline that passed while Paseo was down: put sleep back now.
@@ -290,7 +325,7 @@ export function createLid(deps: LidDeps): Lid {
         // Turned back on by hand (`pmset -a disablesleep 0`): nothing left to time.
         if (on === false) {
           await deps.stopGuard().catch(() => undefined);
-          await save({ ...OFF_STATE });
+          await save({ ...OFF_STATE, darkWhenClosed: stored.darkWhenClosed });
         }
       }),
 
@@ -315,7 +350,9 @@ export function createLid(deps: LidDeps): Lid {
           await deps.stopGuard().catch(() => undefined);
           error = "";
           ended = "";
-          await save({ until: "", minutes: 0, forever: true });
+          // A lid already closed when lid mode comes on counts as just closed.
+          wasClosed = false;
+          await save({ until: "", minutes: 0, forever: true, darkWhenClosed: stored.darkWhenClosed });
           await readSleep();
           log("caffeine: lid mode on with no end");
           return;
@@ -336,7 +373,8 @@ export function createLid(deps: LidDeps): Lid {
         }
         error = "";
         ended = "";
-        await save({ until: new Date(until).toISOString(), minutes, forever: false });
+        wasClosed = false;
+        await save({ until: new Date(until).toISOString(), minutes, forever: false, darkWhenClosed: stored.darkWhenClosed });
         await readSleep();
         log(`caffeine: lid mode on for ${minutes} min`);
       }),
@@ -358,7 +396,21 @@ export function createLid(deps: LidDeps): Lid {
       await readPermission();
     },
 
-    status: () => ({ on: on === true, until: stored.until, minutes: stored.minutes, forever: stored.forever, ended, setup, error }),
+    async checkClosed() {
+      const seen = await deps.run(IOREG, ["-r", "-k", "AppleClamshellState", "-d", "4"]).catch(() => ({ code: 1, stdout: "" }));
+      const closed = parseLidClosed(seen.stdout) === true;
+      const justClosed = closed && !wasClosed;
+      wasClosed = closed;
+      if (!justClosed || !stored.darkWhenClosed || !running() || on !== true) return;
+      const displays = await deps.run(PROFILER, ["SPDisplaysDataType", "-json"]).catch(() => ({ code: 1, stdout: "" }));
+      if (displays.code !== 0 || externalDisplay(displays.stdout)) return;
+      await deps.run(PMSET, ["displaysleepnow"]).catch(() => undefined);
+      log("caffeine: lid closed, display put to sleep");
+    },
+
+    setDarkWhenClosed: (value) => serial(() => save({ ...stored, darkWhenClosed: value })),
+
+    status: () => ({ on: on === true, until: stored.until, minutes: stored.minutes, forever: stored.forever, ended, darkWhenClosed: stored.darkWhenClosed, setup, error }),
   };
 }
 

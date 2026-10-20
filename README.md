@@ -36,9 +36,13 @@ there, lid mode refuses to start, since nothing would bring sleep back. Caffeine
 go of the deadline once `pmset -g` confirms sleep is back, so a failed attempt is retried.
 **Always** has no end and no guard: it lasts until you turn it off (on the tile, from the
 header, or with Sleep now), the battery drops below 20% off the charger, or macOS reports
-the Mac running hot (`pmset -g therm`). The heat check applies to the timed lengths too. Battery and heat are watched only while Paseo runs; with Paseo closed, Always stays on until you turn it off (macOS's own low-battery and thermal shutdowns still apply). By
-hand: `sudo pmset -a disablesleep 0`. To undo the permission: `sudo rm
-/etc/sudoers.d/paseo-caffeine`.
+the Mac running hot (`pmset -g therm`). The heat check applies to the timed lengths too.
+While lid mode is on, closing the lid puts the screen to sleep (`pmset displaysleepnow`,
+checked once a minute, once per closing; not with an external monitor attached, which it would blank too; switch it off on the tile). Lid mode works whatever
+Caffeine's own mode is, Off included: it switches sleep off system-wide. Battery and heat
+are watched only while Paseo runs; with Paseo closed, Always stays on until you turn it off
+(macOS's own low-battery and thermal shutdowns still apply). By hand: `sudo pmset -a
+disablesleep 0`. To undo the permission: `sudo rm /etc/sudoers.d/paseo-caffeine`.
 
 The surface also shows the Mac's own battery: charge, whether the charger is in, and how
 long the charge has left — or how long until it is full.

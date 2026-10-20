@@ -36,6 +36,8 @@ export interface Strings {
   lidAlertLabelForever: string;
   lidEndedBattery: string;
   lidEndedHeat: string;
+  /** The tile's switch: the display goes to sleep when the lid closes. */
+  lidDark: string;
   lidSetup: string;
   lidSetupButton: string;
   lidStop: string;
@@ -108,6 +110,7 @@ const en: Strings = {
   lidAlertLabelForever: "Lid · always",
   lidEndedBattery: "Turned off by itself: the battery was low.",
   lidEndedHeat: "Turned off by itself: the Mac was running hot.",
+  lidDark: "Screen off when the lid closes",
   lidSetup: "Needs a one-time permission on the Mac: it allows only this one power setting.",
   lidSetupButton: "Allow on this Mac",
   lidStop: "Turn off",
@@ -174,6 +177,7 @@ const ru: Strings = {
   lidAlertLabelForever: "Крышка · всегда",
   lidEndedBattery: "Выключился сам: был низкий заряд.",
   lidEndedHeat: "Выключился сам: Mac перегревался.",
+  lidDark: "Гасить экран при закрытой крышке",
   lidSetup: "Нужно один раз разрешить на Mac: это разрешает только эту одну настройку питания.",
   lidSetupButton: "Разрешить на этом Mac",
   lidStop: "Выключить",
@@ -240,6 +244,7 @@ const uk: Strings = {
   lidAlertLabelForever: "Кришка · завжди",
   lidEndedBattery: "Вимкнувся сам: був низький заряд.",
   lidEndedHeat: "Вимкнувся сам: Mac перегрівався.",
+  lidDark: "Гасити екран при закритій кришці",
   lidSetup: "Потрібно один раз дозволити на Mac: це дозволяє лише одне налаштування живлення.",
   lidSetupButton: "Дозволити на цьому Mac",
   lidStop: "Вимкнути",
