@@ -1,6 +1,7 @@
 import { hostname } from "node:os";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
-import { getStatus, setMode, setOptions, sleepNow } from "./shared/caffeine.shared.ts";
+import { getStatus, setLid, setMode, setOptions, setupLid, sleepNow } from "./shared/caffeine.shared.ts";
+import { createLid, systemLidDeps } from "./server/lid.server.ts";
 import { createAgentsProbe } from "./server/agents.server.ts";
 import { createBatteryProbe } from "./server/battery.server.ts";
 import { describeCaffeine, describeRpc } from "./server/capabilities.server.ts";
@@ -33,7 +34,8 @@ export default function contribute(server: PluginServerContext) {
       });
     },
   });
-  const sleeper = createSleeper();
+  const sleeper = createSleeper({ log: (line) => console.log(line) });
+  const lid = createLid(systemLidDeps((line) => console.log(line)));
   const controller: Controller = createController({
     read: () => readStored(),
     write: (stored) => writeStored(stored),
@@ -42,6 +44,7 @@ export default function contribute(server: PluginServerContext) {
     readBattery: () => power.read(),
     wakeUrl: () => waker.url(),
     sleepNow: () => sleeper.request(),
+    lid,
     log: (line) => console.log(line),
   });
 
@@ -50,7 +53,13 @@ export default function contribute(server: PluginServerContext) {
     // The anchor comes up with the controller rather than on first use: it has to be
     // listening and announced *before* the Mac sleeps, and nobody opens a plugin surface
     // on the way to closing the lid.
-    started ??= waker.start().then(() => controller.start());
+    // Lid first: a deadline that passed while the daemon was down is put right before
+    // anything else reads the system.
+    started ??= lid
+      .start()
+      .catch((error) => console.error(`caffeine: lid start failed: ${String(error)}`))
+      .then(() => waker.start())
+      .then(() => controller.start());
     return started.then(() => controller);
   }
 
@@ -79,7 +88,24 @@ export default function contribute(server: PluginServerContext) {
   server.handle(sleepNow, async (_input, { paseo }) => {
     probe.remember(paseo);
     const instance = await startedServer();
+    // With sleep switched off system-wide, `pmset sleepnow` does nothing: lid mode goes first.
+    if (lid.status().on) await lid.disable("sleep now");
     return instance.sleep();
+  });
+
+  server.handle(setLid, async (input, { paseo }) => {
+    probe.remember(paseo);
+    const instance = await startedServer();
+    if (input.lid === "on") await lid.enable(input.minutes);
+    else await lid.disable("turned off");
+    return instance.status();
+  });
+
+  server.handle(setupLid, async (_input, { paseo }) => {
+    probe.remember(paseo);
+    const instance = await startedServer();
+    await lid.setup();
+    return instance.status();
   });
 
   // For God Mode: the operations above, described for an assistant that cannot see them.

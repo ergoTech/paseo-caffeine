@@ -26,6 +26,24 @@ export const battery = z.object({
   minutes: z.number().int().nonnegative().nullable(),
 });
 
+/** The lid timer lengths, in minutes: lid mode is for a while, never open-ended. */
+export const lidMinutes = z.union([z.literal(30), z.literal(60), z.literal(120)]);
+
+/** Whether the one-time permission for lid mode is in place. */
+export const lidSetup = z.enum(["unknown", "needs-setup", "ready"]);
+
+/** Lid mode: the Mac keeps running with the lid closed. `on` is read from the system. */
+export const lidStatus = z.object({
+  on: z.boolean().default(false),
+  /** RFC 3339 deadline, or "" when not set by Caffeine. */
+  until: z.string().default(""),
+  /** The length that was picked; 0 when off or set outside Caffeine. */
+  minutes: z.number().int().nonnegative().default(0),
+  setup: lidSetup.default("unknown"),
+  /** "needs-setup", a failed command's message, or "". */
+  error: z.string().default(""),
+});
+
 /** What every client sees. `until` and `tickAt` are RFC 3339 or empty. */
 export const status = z.object({
   mode,
@@ -45,6 +63,7 @@ export const status = z.object({
    */
   wakeUrl: z.string().default(""),
   battery: battery.nullable().default(null),
+  lid: lidStatus.default({ on: false, until: "", minutes: 0, setup: "unknown", error: "" }),
 });
 
 export const setInput = z.discriminatedUnion("mode", [
@@ -64,6 +83,9 @@ export type Status = z.output<typeof status>;
 export type SetInput = z.output<typeof setInput>;
 export type SetOptionsInput = z.output<typeof setOptionsInput>;
 export type Battery = z.output<typeof battery>;
+export type LidMinutes = z.output<typeof lidMinutes>;
+export type LidSetup = z.output<typeof lidSetup>;
+export type LidStatus = z.output<typeof lidStatus>;
 
 export const getStatus = defineRpc({
   name: "caffeine.get",
@@ -105,6 +127,23 @@ export const SLEEP_DELAY_MS = 1_000;
 
 export const sleepNow = defineRpc({
   name: "caffeine.sleep",
+  input: z.object({}),
+  output: status,
+});
+
+/** Turns lid mode on for a while, or off. */
+export const setLid = defineRpc({
+  name: "caffeine.lid",
+  input: z.discriminatedUnion("lid", [
+    z.object({ lid: z.literal("on"), minutes: lidMinutes }),
+    z.object({ lid: z.literal("off") }),
+  ]),
+  output: status,
+});
+
+/** The one-time permission for lid mode, through macOS's own password dialog on the Mac. */
+export const setupLid = defineRpc({
+  name: "caffeine.lid-setup",
   input: z.object({}),
   output: status,
 });

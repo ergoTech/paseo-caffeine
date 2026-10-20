@@ -1,4 +1,4 @@
-import type { Battery, SetInput, SetOptionsInput, Status } from "../shared/caffeine.shared.ts";
+import type { Battery, LidStatus, SetInput, SetOptionsInput, Status } from "../shared/caffeine.shared.ts";
 import type { Keeper } from "./keeper.server.ts";
 import { TICK_MS, type Stored, decide, defaultStored, nextBusyUntil, untilForMinutes } from "./policy.ts";
 
@@ -13,6 +13,8 @@ export interface ControllerDeps {
   wakeUrl?(): string;
   /** Orders the Mac under; absent in tests that have no business suspending anything. */
   sleepNow?(): void;
+  /** Lid mode, checked on the same tick; absent in tests that do not touch it. */
+  lid?: { tick(battery: Battery | null): Promise<void>; status(): LidStatus };
   now?: () => number;
   tickMs?: number;
   log?: (line: string) => void;
@@ -60,6 +62,7 @@ export function createController(deps: ControllerDeps): Controller {
       keepDisplay: stored.keepDisplay,
       wakeUrl: deps.wakeUrl?.() ?? "",
       battery,
+      lid: deps.lid?.status() ?? { on: false, until: "", minutes: 0, setup: "unknown", error: "" },
     };
   }
 
@@ -70,6 +73,8 @@ export function createController(deps: ControllerDeps): Controller {
     // The battery has no say in whether the Mac stays awake; it is read here only
     // because this is the one place that already runs on a timer.
     if (deps.readBattery) battery = await deps.readBattery();
+    // Lid mode ends at its deadline or on a low battery whatever the mode says.
+    if (deps.lid) await deps.lid.tick(battery).catch((failure) => log(`caffeine: lid check failed: ${String(failure)}`));
     busyUntil = nextBusyUntil(busyUntil, running, nowMs);
 
     const decision = decide(stored, nowMs, busyUntil);
@@ -153,6 +158,7 @@ export function createController(deps: ControllerDeps): Controller {
      */
     sleep() {
       deps.keeper.release();
+      log(`caffeine: sleep asked for (was ${stored.mode}, hold released)`);
       deps.sleepNow?.();
       return snapshot();
     },

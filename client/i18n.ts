@@ -25,6 +25,19 @@ export interface Strings {
   minutes(n: number): string;
   displayLabel: string;
   displayState(on: boolean): string;
+  /** Lid mode: the Mac keeps running with the lid closed. */
+  lidLabel: string;
+  lidOff: string;
+  lidOn(remaining: string): string;
+  lidOnNoTimer: string;
+  lidSetup: string;
+  lidSetupButton: string;
+  lidStop: string;
+  lidFailed(message: string): string;
+  /** The header alert while lid mode is on. */
+  lidAlertTitle: string;
+  lidAlertLabel(remaining: string): string;
+  lidAlertLabelNoTimer: string;
   sleepLabel: string;
   sleepDetail: string;
   /** The tile's own three stages, and what it is called once the Mac has gone. */
@@ -80,6 +93,17 @@ const en: Strings = {
   minutes: (n) => `${n} min`,
   displayLabel: "Keep display on",
   displayState: (on) => (on ? "the screen stays lit" : "the screen sleeps"),
+  lidLabel: "Lid closed",
+  lidOff: "A closed lid sleeps the Mac. Pick how long it may keep running with the lid shut.",
+  lidOn: (remaining) => `You can close the lid · ${remaining} left. Sleep comes back by itself.`,
+  lidOnNoTimer: "Sleep is switched off on this Mac outside Caffeine.",
+  lidSetup: "Needs a one-time permission on the Mac: it allows only this one power setting.",
+  lidSetupButton: "Allow on this Mac",
+  lidStop: "Turn off",
+  lidFailed: (message) => `Did not work: ${message}`,
+  lidAlertTitle: "Lid mode is on: this Mac will not sleep. Press to turn it off",
+  lidAlertLabel: (remaining) => `Lid · ${remaining}`,
+  lidAlertLabelNoTimer: "Lid · no sleep",
   sleepLabel: "Sleep now",
   sleepDetail: "goes under in a second",
   sleepAsking: "asking the Mac…",
@@ -130,6 +154,17 @@ const ru: Strings = {
   minutes: (n) => `${n} мин`,
   displayLabel: "Не гасить экран",
   displayState: (on) => (on ? "экран не гаснет" : "экран гаснет как обычно"),
+  lidLabel: "Закрытая крышка",
+  lidOff: "С закрытой крышкой Mac засыпает. Выбери, сколько ему работать с закрытой.",
+  lidOn: (remaining) => `Можно закрывать крышку · осталось ${remaining}. Сон вернётся сам.`,
+  lidOnNoTimer: "Сон на этом Mac выключен не через Caffeine.",
+  lidSetup: "Нужно один раз разрешить на Mac: это разрешает только эту одну настройку питания.",
+  lidSetupButton: "Разрешить на этом Mac",
+  lidStop: "Выключить",
+  lidFailed: (message) => `Не вышло: ${message}`,
+  lidAlertTitle: "Режим крышки включён: Mac не заснёт. Нажми, чтобы выключить",
+  lidAlertLabel: (remaining) => `Крышка · ${remaining}`,
+  lidAlertLabelNoTimer: "Крышка · без сна",
   sleepLabel: "Усыпить",
   sleepDetail: "уснёт через секунду",
   sleepAsking: "прошу мак…",
@@ -180,6 +215,17 @@ const uk: Strings = {
   minutes: (n) => `${n} хв`,
   displayLabel: "Не гасити екран",
   displayState: (on) => (on ? "екран не гасне" : "екран гасне як завжди"),
+  lidLabel: "Закрита кришка",
+  lidOff: "Із закритою кришкою Mac засинає. Обери, скільки йому працювати із закритою.",
+  lidOn: (remaining) => `Можна закривати кришку · лишилось ${remaining}. Сон повернеться сам.`,
+  lidOnNoTimer: "Сон на цьому Mac вимкнено не через Caffeine.",
+  lidSetup: "Потрібно один раз дозволити на Mac: це дозволяє лише одне налаштування живлення.",
+  lidSetupButton: "Дозволити на цьому Mac",
+  lidStop: "Вимкнути",
+  lidFailed: (message) => `Не вийшло: ${message}`,
+  lidAlertTitle: "Режим кришки ввімкнено: Mac не засне. Натисни, щоб вимкнути",
+  lidAlertLabel: (remaining) => `Кришка · ${remaining}`,
+  lidAlertLabelNoTimer: "Кришка · без сну",
   sleepLabel: "Приспати",
   sleepDetail: "засне за секунду",
   sleepAsking: "прошу мак…",
