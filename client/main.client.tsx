@@ -389,6 +389,7 @@ function LidCard({
   now,
   busy,
   onPick,
+  onForever,
   onStop,
   onSetup,
 }: {
@@ -398,6 +399,7 @@ function LidCard({
   now: number;
   busy: boolean;
   onPick(minutes: LidMinutes): void;
+  onForever(): void;
   onStop(): void;
   onSetup(): void;
 }) {
@@ -409,11 +411,14 @@ function LidCard({
     needsSetup && !lid.on
       ? strings.lidSetup
       : lid.on
-        ? lid.until === ""
-          ? strings.lidOnNoTimer
-          : strings.lidOn(formatRemaining(remainingMs, strings))
+        ? lid.forever
+          ? strings.lidOnForever
+          : lid.until === ""
+            ? strings.lidOnNoTimer
+            : strings.lidOn(formatRemaining(remainingMs, strings))
         : strings.lidOff;
   const failed = lid.error !== "" && lid.error !== "needs-setup" ? strings.lidFailed(lid.error) : "";
+  const endedNote = lid.on ? "" : lid.ended === "heat" ? strings.lidEndedHeat : lid.ended === "battery" ? strings.lidEndedBattery : "";
 
   return (
     <View style={{ flexDirection: "row" }}>
@@ -439,8 +444,12 @@ function LidCard({
               />
             ))
           )}
+          {needsSetup ? null : (
+            <Chip label={strings.lidForever} selected={lid.on && lid.forever} theme={theme} onPress={() => (busy ? undefined : onForever())} />
+          )}
           {lid.on ? <Chip label={strings.lidStop} selected={false} theme={theme} onPress={() => (busy ? undefined : onStop())} /> : null}
         </View>
+        {endedNote !== "" ? <Text style={{ color: theme.colors.statusWarning, fontSize: 12 }}>{endedNote}</Text> : null}
         {failed !== "" ? <Text style={{ color: theme.colors.statusDanger ?? theme.colors.foregroundMuted, fontSize: 12 }}>{failed}</Text> : null}
       </ModeCard>
     </View>
@@ -663,6 +672,7 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
             now={now}
             busy={lid.isPending || lidSetupRun.isPending}
             onPick={(minutes) => lid.mutate({ lid: "on", minutes })}
+            onForever={() => lid.mutate({ lid: "forever" })}
             onStop={() => lid.mutate({ lid: "off" })}
             onSetup={() => lidSetupRun.mutate()}
           />

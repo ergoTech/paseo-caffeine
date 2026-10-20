@@ -30,6 +30,12 @@ export interface Strings {
   lidOff: string;
   lidOn(remaining: string): string;
   lidOnNoTimer: string;
+  /** Lid mode with no end: the chip, the tile's line and the header label. */
+  lidForever: string;
+  lidOnForever: string;
+  lidAlertLabelForever: string;
+  lidEndedBattery: string;
+  lidEndedHeat: string;
   lidSetup: string;
   lidSetupButton: string;
   lidStop: string;
@@ -97,6 +103,11 @@ const en: Strings = {
   lidOff: "A closed lid sleeps the Mac. Pick how long it may keep running with the lid shut.",
   lidOn: (remaining) => `You can close the lid · ${remaining} left. Sleep comes back by itself.`,
   lidOnNoTimer: "Sleep is switched off on this Mac outside Caffeine.",
+  lidForever: "Always",
+  lidOnForever: "You can close the lid, with no end. Turn it off here or from the header; a low battery or heat turns it off too.",
+  lidAlertLabelForever: "Lid · always",
+  lidEndedBattery: "Turned off by itself: the battery was low.",
+  lidEndedHeat: "Turned off by itself: the Mac was running hot.",
   lidSetup: "Needs a one-time permission on the Mac: it allows only this one power setting.",
   lidSetupButton: "Allow on this Mac",
   lidStop: "Turn off",
@@ -158,6 +169,11 @@ const ru: Strings = {
   lidOff: "С закрытой крышкой Mac засыпает. Выбери, сколько ему работать с закрытой.",
   lidOn: (remaining) => `Можно закрывать крышку · осталось ${remaining}. Сон вернётся сам.`,
   lidOnNoTimer: "Сон на этом Mac выключен не через Caffeine.",
+  lidForever: "Всегда",
+  lidOnForever: "Можно закрывать крышку, без ограничения по времени. Выключи здесь или в шапке; низкий заряд или перегрев выключат сами.",
+  lidAlertLabelForever: "Крышка · всегда",
+  lidEndedBattery: "Выключился сам: был низкий заряд.",
+  lidEndedHeat: "Выключился сам: Mac перегревался.",
   lidSetup: "Нужно один раз разрешить на Mac: это разрешает только эту одну настройку питания.",
   lidSetupButton: "Разрешить на этом Mac",
   lidStop: "Выключить",
@@ -219,6 +235,11 @@ const uk: Strings = {
   lidOff: "Із закритою кришкою Mac засинає. Обери, скільки йому працювати із закритою.",
   lidOn: (remaining) => `Можна закривати кришку · лишилось ${remaining}. Сон повернеться сам.`,
   lidOnNoTimer: "Сон на цьому Mac вимкнено не через Caffeine.",
+  lidForever: "Завжди",
+  lidOnForever: "Можна закривати кришку, без обмеження в часі. Вимкни тут або в шапці; низький заряд чи перегрів вимкнуть самі.",
+  lidAlertLabelForever: "Кришка · завжди",
+  lidEndedBattery: "Вимкнувся сам: був низький заряд.",
+  lidEndedHeat: "Вимкнувся сам: Mac перегрівався.",
   lidSetup: "Потрібно один раз дозволити на Mac: це дозволяє лише одне налаштування живлення.",
   lidSetupButton: "Дозволити на цьому Mac",
   lidStop: "Вимкнути",

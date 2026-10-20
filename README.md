@@ -21,21 +21,24 @@ Only system sleep is held and the display sleeps as usual — unless **Keep the 
 on** is switched on, which holds both. A closed lid still sleeps a MacBook, `caffeinate`
 or not.
 
-**Lid closed** is the one exception to that, on a clock: 30 min, 1 h or 2 h with the lid
+**Lid closed** is the one exception to that: 30 min, 1 h, 2 h or **Always** with the lid
 shut and no display attached. It flips the system's own `pmset disablesleep`, which needs
 root, so the first press offers **Allow on this Mac**: macOS asks for the password (or Touch
 ID) once, and a sudoers rule allowing exactly `pmset -a disablesleep 1` and `… 0`, checked
-with `visudo` first, goes into `/etc/sudoers.d/paseo-caffeine`. After that the tile works from
-the phone too. Sleep comes back by itself at the deadline, on battery below 20%, and before
-**Sleep now**. A guard does the same even if Paseo is not running by then: a LaunchAgent
-(`~/Library/LaunchAgents/com.paseo.caffeine.lid-guard.plist`) that waits for the deadline,
-restores sleep (retrying for up to half an hour until `pmset -g` confirms it) and removes
-itself; after a reboot it runs again at login. macOS may announce it as a new background item
-(shown as `sh` in System Settings → General → Login Items); switched off there, lid mode refuses
-to start, since nothing would bring sleep back. Caffeine only lets go
-of the deadline once `pmset -g` confirms sleep is back, so a failed attempt is retried. A closed
-Mac that never sleeps in a bag gets hot; that is why there is no open-ended setting. By hand:
-`sudo pmset -a disablesleep 0`. To undo the permission: `sudo rm /etc/sudoers.d/paseo-caffeine`.
+with `visudo` first, goes into `/etc/sudoers.d/paseo-caffeine`. After that the tile works
+from the phone too. Sleep comes back by itself at the deadline, on battery below 20%, and
+before **Sleep now**. A guard does the same even if Paseo is not running by then: a
+LaunchAgent (`~/Library/LaunchAgents/com.paseo.caffeine.lid-guard.plist`) that waits for the
+deadline, restores sleep (retrying for up to half an hour until `pmset -g` confirms it) and
+removes itself; after a reboot it runs again at login. macOS may announce it as a new
+background item (shown as `sh` in System Settings → General → Login Items); switched off
+there, lid mode refuses to start, since nothing would bring sleep back. Caffeine only lets
+go of the deadline once `pmset -g` confirms sleep is back, so a failed attempt is retried.
+**Always** has no end and no guard: it lasts until you turn it off (on the tile, from the
+header, or with Sleep now), the battery drops below 20% off the charger, or macOS reports
+the Mac running hot (`pmset -g therm`). The heat check applies to the timed lengths too. Battery and heat are watched only while Paseo runs; with Paseo closed, Always stays on until you turn it off (macOS's own low-battery and thermal shutdowns still apply). By
+hand: `sudo pmset -a disablesleep 0`. To undo the permission: `sudo rm
+/etc/sudoers.d/paseo-caffeine`.
 
 The surface also shows the Mac's own battery: charge, whether the charger is in, and how
 long the charge has left — or how long until it is full.

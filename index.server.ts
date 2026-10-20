@@ -97,6 +97,7 @@ export default function contribute(server: PluginServerContext) {
     probe.remember(paseo);
     const instance = await startedServer();
     if (input.lid === "on") await lid.enable(input.minutes);
+    else if (input.lid === "forever") await lid.enable("forever");
     else await lid.disable("turned off");
     return instance.status();
   });
