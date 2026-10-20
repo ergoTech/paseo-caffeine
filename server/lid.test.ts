@@ -464,12 +464,49 @@ test("closing the lid puts the display to sleep once, while lid mode is on", asy
   closed = true;
   await lid.checkClosed();
   await lid.checkClosed();
-  assert.equal(darkened(), 1, "once per closing, not every minute");
+  assert.equal(darkened(), 2, "every check while the lid stays shut, so a woken panel goes dark again");
   closed = false;
   await lid.checkClosed();
+  assert.equal(darkened(), 2, "open: left alone");
   closed = true;
   await lid.checkClosed();
-  assert.equal(darkened(), 2, "closed again: once more");
+  assert.equal(darkened(), 3);
+});
+
+test("a monitor plugged in after the lid closed is never blanked, and once found it is not asked again", async () => {
+  let monitor = false;
+  let profiles = 0;
+  const mac = fakeMac({ lidClosed: () => true });
+  const run = mac.deps.run;
+  mac.deps.run = async (command, args) => {
+    if (!command.endsWith("system_profiler")) return run(command, args);
+    profiles += 1;
+    const internal = { spdisplays_connection_type: "spdisplays_internal" };
+    const ndrvs = monitor ? [internal, { spdisplays_connection_type: "spdisplays_hdmi" }] : [internal];
+    return { code: 0, stdout: JSON.stringify({ SPDisplaysDataType: [{ spdisplays_ndrvs: ndrvs }] }) };
+  };
+  const lid = createLid(mac.deps);
+  await lid.start();
+  await lid.enable("forever");
+  const darkened = () => mac.calls.filter((call) => call.endsWith("displaysleepnow")).length;
+  await lid.checkClosed();
+  assert.equal(darkened(), 1, "shut, no monitor: dark");
+  monitor = true;
+  await lid.checkClosed();
+  await lid.checkClosed();
+  assert.equal(darkened(), 1, "a monitor appeared: left alone from then on");
+  assert.equal(profiles, 2, "asked while there was none, not again once one was found");
+});
+
+test("a lid that cannot be read changes nothing", async () => {
+  const mac = fakeMac({ lidClosed: () => true });
+  const run = mac.deps.run;
+  mac.deps.run = async (command, args) => (command.endsWith("ioreg") ? { code: 1, stdout: "" } : run(command, args));
+  const lid = createLid(mac.deps);
+  await lid.start();
+  await lid.enable("forever");
+  await lid.checkClosed();
+  assert.ok(!mac.calls.some((call) => call.endsWith("displaysleepnow")));
 });
 
 test("the display is left alone when lid mode is off or the switch is off", async () => {
@@ -509,6 +546,7 @@ test("turning lid mode on with the lid already shut puts the display to sleep on
   const lid = createLid(mac.deps);
   await lid.start();
   await lid.checkClosed();
+  assert.equal(mac.calls.filter((call) => call.endsWith("displaysleepnow")).length, 0, "lid mode off: left alone");
   await lid.enable("forever");
   await lid.checkClosed();
   assert.equal(mac.calls.filter((call) => call.endsWith("displaysleepnow")).length, 1);

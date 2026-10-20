@@ -201,8 +201,8 @@ export interface Lid {
   enable(minutes: number | "forever"): Promise<void>;
   disable(why: string): Promise<void>;
   setup(): Promise<void>;
-  /** Puts the display to sleep when the lid has just closed while lid mode is on. Once per
-   *  closing: a lid that stays closed is not asked again. */
+  /** Keeps the display asleep while the lid is closed and lid mode is on, checked once a
+   *  minute; never while an external monitor is attached. */
   checkClosed(): Promise<void>;
   setDarkWhenClosed(value: boolean): Promise<void>;
   status(): LidStatus;
@@ -253,8 +253,10 @@ export function createLid(deps: LidDeps): Lid {
     await deps.write(stored);
   }
 
-  /** The lid as last seen, so the display is put to sleep once per closing. */
+  /** The lid as last seen, to log its changes and look for a monitor once per closing. */
   let wasClosed = false;
+  /** Whether a monitor other than the built-in one was in use at this closing; null: not asked. */
+  let externalSeen: boolean | null = null;
 
   /** Why lid mode last ended on its own, for the tile; cleared when it is turned on again. */
   let ended: "" | "battery" | "heat" = "";
@@ -352,6 +354,7 @@ export function createLid(deps: LidDeps): Lid {
           ended = "";
           // A lid already closed when lid mode comes on counts as just closed.
           wasClosed = false;
+          externalSeen = null;
           await save({ until: "", minutes: 0, forever: true, darkWhenClosed: stored.darkWhenClosed });
           await readSleep();
           log("caffeine: lid mode on with no end");
@@ -374,6 +377,7 @@ export function createLid(deps: LidDeps): Lid {
         error = "";
         ended = "";
         wasClosed = false;
+        externalSeen = null;
         await save({ until: new Date(until).toISOString(), minutes, forever: false, darkWhenClosed: stored.darkWhenClosed });
         await readSleep();
         log(`caffeine: lid mode on for ${minutes} min`);
@@ -398,14 +402,28 @@ export function createLid(deps: LidDeps): Lid {
 
     async checkClosed() {
       const seen = await deps.run(IOREG, ["-r", "-k", "AppleClamshellState", "-d", "4"]).catch(() => ({ code: 1, stdout: "" }));
-      const closed = parseLidClosed(seen.stdout) === true;
-      const justClosed = closed && !wasClosed;
-      wasClosed = closed;
-      if (!justClosed || !stored.darkWhenClosed || !running() || on !== true) return;
-      const displays = await deps.run(PROFILER, ["SPDisplaysDataType", "-json"]).catch(() => ({ code: 1, stdout: "" }));
-      if (displays.code !== 0 || externalDisplay(displays.stdout)) return;
+      const read = parseLidClosed(seen.stdout);
+      // Unknown is neither: nothing changes until the lid can be read again.
+      if (seen.code !== 0 || read === null) return;
+      const justClosed = read && !wasClosed;
+      if (read !== wasClosed) {
+        log(`caffeine: lid ${read ? "closed" : "opened"}`);
+        externalSeen = null;
+      }
+      wasClosed = read;
+      if (!read || !stored.darkWhenClosed || !running() || on !== true) return;
+      // A monitor found stays found until the lid opens. "None" is asked again every time: one
+      // plugged in after the lid closed must not be blanked every minute.
+      if (externalSeen !== true) {
+        const displays = await deps.run(PROFILER, ["SPDisplaysDataType", "-json"]).catch(() => ({ code: 1, stdout: "" }));
+        externalSeen = displays.code !== 0 || externalDisplay(displays.stdout);
+      }
+      if (externalSeen) return;
+      // Every check while the lid stays shut, not only on closing: whatever wakes the panel
+      // under a closed lid (a missed closing, a notification) is put right within a minute. A
+      // display already asleep is left as it is.
       await deps.run(PMSET, ["displaysleepnow"]).catch(() => undefined);
-      log("caffeine: lid closed, display put to sleep");
+      if (justClosed) log("caffeine: lid closed, display put to sleep");
     },
 
     setDarkWhenClosed: (value) => serial(() => save({ ...stored, darkWhenClosed: value })),

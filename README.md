@@ -38,7 +38,8 @@ go of the deadline once `pmset -g` confirms sleep is back, so a failed attempt i
 header, or with Sleep now), the battery drops below 20% off the charger, or macOS reports
 the Mac running hot (`pmset -g therm`). The heat check applies to the timed lengths too.
 While lid mode is on, closing the lid puts the screen to sleep (`pmset displaysleepnow`,
-checked once a minute, once per closing; not with an external monitor attached, which it would blank too; switch it off on the tile). Lid mode works whatever
+checked once a minute while the lid stays shut, so a panel woken under a closed lid goes dark
+again; not with an external monitor attached, which it would blank too (also one plugged in after the lid closed); with Screen Sharing into a closed Mac, switch it off on the tile, or the shared screen goes dark every minute; switch it off on the tile). Lid mode works whatever
 Caffeine's own mode is, Off included: it switches sleep off system-wide. Battery and heat
 are watched only while Paseo runs; with Paseo closed, Always stays on until you turn it off
 (macOS's own low-battery and thermal shutdowns still apply). By hand: `sudo pmset -a
