@@ -12,6 +12,7 @@ import {
   localDay,
   nextAt,
   subscriptionLogin,
+  warmupTargets,
 } from "./warmup.server.ts";
 
 // Local times, as the schedule is: 20 Oct 2026 in whatever zone the tests run in.
@@ -154,4 +155,26 @@ test("claude runs on the directory's own login, never on an inherited key or tok
   assert.deepEqual(work, { PATH: "/bin", CLAUDE_CONFIG_DIR: "/home/me/.claude-work" });
   const own = claudeEnv("/home/me/.claude/", base, "/home/me");
   assert.deepEqual(own, { PATH: "/bin" }, "the default directory is reached by leaving the variable unset");
+});
+
+test("every logged-in folder is warmed up, even when two name the same login", () => {
+  // Seen live: .claude-laco-data's cache named the same login as .claude-work while holding
+  // another; merging by name warmed laco-data and left .claude-work's login cold.
+  const sub = { loggedIn: true, authMethod: "claude.ai", apiProvider: "firstParty" };
+  const targets = warmupTargets([
+    { dir: "/h/.claude", status: { ...sub, email: "a@x" } },
+    { dir: "/h/.claude-laco-data", status: { ...sub, email: "b@y", orgId: "o" } },
+    { dir: "/h/.claude-work", status: { ...sub, email: "b@y", orgId: "o" } },
+    { dir: "/h/.claude-gone", status: { loggedIn: false } },
+    { dir: "/h/.claude-api", status: { loggedIn: true, authMethod: "api_key", email: "c@z" } },
+  ]);
+  assert.deepEqual(
+    targets.map((t) => [t.dir, t.label, t.skip ?? ""]),
+    [
+      ["/h/.claude", "a@x (.claude)", ""],
+      ["/h/.claude-laco-data", "b@y (.claude-laco-data)", ""],
+      ["/h/.claude-work", "b@y (.claude-work)", ""],
+      ["/h/.claude-api", "c@z (.claude-api)", "skipped: not a Claude subscription login"],
+    ],
+  );
 });

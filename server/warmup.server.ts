@@ -6,9 +6,9 @@ import { z } from "zod";
 import type { WarmupStatus } from "../shared/caffeine.shared.ts";
 
 /**
- * Session warm-up: one tiny Haiku message per Claude login at a set hour, so the 5-hour
- * window starts before the working day and resets partway into it (warm up at 06:00, start
- * at 09:00, a fresh window at 11:00).
+ * Session warm-up: one tiny Haiku message per logged-in Claude config folder at a set hour, so
+ * each login's 5-hour window starts before the working day and resets partway into it (warm up
+ * at 06:00, start at 09:00, a fresh window at 11:00).
  *
  * It only happens while the Mac is awake; it does not wake it. A warm-up missed because the
  * Mac slept is caught up within `CATCH_UP_MS` of the hour and given up after that: a window
@@ -149,6 +149,25 @@ export function subscriptionLogin(status: AuthStatus): boolean {
   return status.loggedIn === true && status.authMethod === "claude.ai" && status.apiProvider === "firstParty";
 }
 
+/**
+ * What gets a warm-up message: every logged-in config folder, one message each. Not one per
+ * login: `claude auth status` names a folder's login from the cache in its `.claude.json`,
+ * which Claude Code rewrites to whichever login last ran a chat there, so two folders can name
+ * the same login while holding different ones. Merging by that name once sent a login's
+ * warm-up through a folder that was really another login, and the login itself got none. A
+ * message per folder reaches every token there is, whatever the cache says.
+ */
+export function warmupTargets(entries: ReadonlyArray<{ dir: string; status: AuthStatus }>): Login[] {
+  return entries
+    .filter(({ status }) => status.loggedIn === true)
+    .map(({ dir, status }) => ({
+      dir,
+      key: dir,
+      label: `${status.email || "?"} (${dir.slice(dir.lastIndexOf("/") + 1)})`,
+      skip: subscriptionLogin(status) ? "" : "skipped: not a Claude subscription login",
+    }));
+}
+
 export interface Login {
   dir: string;
   /** What makes two directories the same login: they share one allowance. */
@@ -161,7 +180,7 @@ export interface Login {
 export interface WarmupDeps {
   read(): Promise<WarmupStored>;
   write(value: WarmupStored): Promise<void>;
-  /** Every distinct logged-in Claude login on this Mac. */
+  /** Every logged-in Claude config folder on this Mac; see `warmupTargets`. */
   logins(): Promise<Login[]>;
   /** Sends one tiny message on the directory's login. */
   ping(dir: string): Promise<{ ok: boolean; error: string }>;
@@ -282,7 +301,7 @@ function run(file: string, args: readonly string[], env: NodeJS.ProcessEnv, time
 }
 
 /** The real thing: `~/.claude` and every `~/.claude*` folder holding a `.claude.json`, asked
- *  who they are logged in as, one directory per login. */
+ *  whether they are logged in, each one warmed up on its own. */
 export function systemWarmupDeps(log: (line: string) => void, home: string = homedir()): WarmupDeps {
   return {
     read: () => readWarmup(),
@@ -295,24 +314,16 @@ export function systemWarmupDeps(log: (line: string) => void, home: string = hom
         if (!/^\.claude[-_.].+/.test(name)) continue;
         if (await isFile(join(home, name, ".claude.json"))) dirs.push(join(home, name));
       }
-      const seen = new Set<string>();
-      const logins: Login[] = [];
+      const entries: Array<{ dir: string; status: AuthStatus }> = [];
       for (const dir of dirs) {
         const answer = await run(claude, ["auth", "status", "--json"], claudeEnv(dir, process.env, home), 20_000);
         try {
-          const who = JSON.parse(answer.stdout) as AuthStatus;
-          if (who.loggedIn !== true) continue;
-          // A login with neither email nor org is told apart by its directory, not merged.
-          const key = who.email || who.orgId ? `${who.email ?? ""}|${who.orgId ?? ""}` : `dir:${dir}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          const skip = subscriptionLogin(who) ? "" : "skipped: not a Claude subscription login";
-          logins.push({ dir, key, label: who.email || dir, skip });
+          entries.push({ dir, status: JSON.parse(answer.stdout) as AuthStatus });
         } catch {
           // Not a login we can read: skipped.
         }
       }
-      return logins;
+      return warmupTargets(entries);
     },
     ping: async (dir) => {
       const claude = await findClaude(home);
