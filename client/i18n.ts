@@ -4,7 +4,7 @@ export interface Strings {
   sidebarTitle: string;
   title: string;
   tagline: string;
-  taglineDetail: string;
+  taglineDetail(keepDisplay: boolean): string;
   stateAwake: string;
   stateAsleep: string;
   remaining(remaining: string): string;
@@ -25,6 +25,8 @@ export interface Strings {
   autoDetail: string;
   hours(n: number): string;
   minutes(n: number): string;
+  displayLabel: string;
+  displayState(on: boolean): string;
   /** The timer's lid switch: the timer and On also let the lid close. */
   lidLabel: string;
   lidOff: string;
@@ -80,13 +82,15 @@ export interface Strings {
   commandOn: string;
   commandTimer(hours: number): string;
   commandAuto: string;
+  commandDisplayOn: string;
+  commandDisplayOff: string;
 }
 
 const en: Strings = {
   sidebarTitle: "Caffeine",
   title: "Caffeine",
   tagline: "Keeps the Mac awake for your agents.",
-  taglineDetail: "Only system sleep is held; the display goes dark as usual.",
+  taglineDetail: (keepDisplay) => (keepDisplay ? "System sleep and the display are both held." : "Only system sleep is held; the display goes dark as usual."),
   stateAwake: "AWAKE",
   stateAsleep: "SLEEPS AS USUAL",
   remaining: (remaining) => `${remaining} left`,
@@ -106,6 +110,8 @@ const en: Strings = {
   autoDetail: "releases three minutes after the last agent goes quiet",
   hours: (n) => `${n} h`,
   minutes: (n) => `${n} min`,
+  displayLabel: "Keep display on",
+  displayState: (on) => (on ? "the screen stays lit" : "the screen sleeps"),
   lidLabel: "Lid can close",
   lidOff: "A closed lid sleeps the Mac. Switch on to keep it running with the lid shut for the timer, or under On.",
   lidIdle: "Pick a timer or On: the lid can close for as long as it lasts.",
@@ -152,13 +158,15 @@ const en: Strings = {
   commandOn: "Caffeine: on",
   commandTimer: (hours) => `Caffeine: ${hours} hours`,
   commandAuto: "Caffeine: while agents work",
+  commandDisplayOn: "Caffeine: keep the display on",
+  commandDisplayOff: "Caffeine: let the display sleep",
 };
 
 const ru: Strings = {
   sidebarTitle: "Кофеин",
   title: "Кофеин",
   tagline: "Не даёт Mac уснуть, пока работают агенты.",
-  taglineDetail: "Только сон системы: экран гаснет как обычно.",
+  taglineDetail: (keepDisplay) => (keepDisplay ? "Держим и систему, и экран." : "Только сон системы: экран гаснет как обычно."),
   stateAwake: "НЕ СПИТ",
   stateAsleep: "СПИТ КАК ОБЫЧНО",
   remaining: (remaining) => `осталось ${remaining}`,
@@ -178,6 +186,8 @@ const ru: Strings = {
   autoDetail: "отпускает через три минуты после последнего агента",
   hours: (n) => `${n} ч`,
   minutes: (n) => `${n} мин`,
+  displayLabel: "Не гасить экран",
+  displayState: (on) => (on ? "экран не гаснет" : "экран гаснет как обычно"),
   lidLabel: "Можно закрыть крышку",
   lidOff: "С закрытой крышкой Mac засыпает. Включи, чтобы он работал с закрытой крышкой на время таймера или в режиме Вкл.",
   lidIdle: "Выбери таймер или Вкл: крышку можно закрыть, пока он идёт.",
@@ -224,13 +234,15 @@ const ru: Strings = {
   commandOn: "Caffeine: включить",
   commandTimer: (hours) => `Caffeine: на ${hours} часа`,
   commandAuto: "Caffeine: пока работают агенты",
+  commandDisplayOn: "Caffeine: не гасить экран",
+  commandDisplayOff: "Caffeine: разрешить гасить экран",
 };
 
 const uk: Strings = {
   sidebarTitle: "Кофеїн",
   title: "Кофеїн",
   tagline: "Не дає Mac заснути, доки працюють агенти.",
-  taglineDetail: "Лише сон системи: екран гасне як зазвичай.",
+  taglineDetail: (keepDisplay) => (keepDisplay ? "Тримаємо і систему, і екран." : "Лише сон системи: екран гасне як зазвичай."),
   stateAwake: "НЕ СПИТЬ",
   stateAsleep: "СПИТЬ ЯК ЗАЗВИЧАЙ",
   remaining: (remaining) => `залишилось ${remaining}`,
@@ -250,6 +262,8 @@ const uk: Strings = {
   autoDetail: "відпускає через три хвилини після останнього агента",
   hours: (n) => `${n} год`,
   minutes: (n) => `${n} хв`,
+  displayLabel: "Не гасити екран",
+  displayState: (on) => (on ? "екран не гасне" : "екран гасне як завжди"),
   lidLabel: "Можна закрити кришку",
   lidOff: "Із закритою кришкою Mac засинає. Увімкни, щоб він працював із закритою кришкою на час таймера або в режимі Увімк.",
   lidIdle: "Обери таймер або Увімк: кришку можна закрити, поки він триває.",
@@ -296,6 +310,8 @@ const uk: Strings = {
   commandOn: "Caffeine: увімкнути",
   commandTimer: (hours) => `Caffeine: на ${hours} години`,
   commandAuto: "Caffeine: доки працюють агенти",
+  commandDisplayOn: "Caffeine: не гасити екран",
+  commandDisplayOff: "Caffeine: дозволити гасити екран",
 };
 
 const catalogue: Record<Locale, Strings> = { en, ru, uk };

@@ -18,8 +18,8 @@ type TimerMinutes = (typeof TIMER_MINUTES)[number];
  * than the size: Off, On and Sleep now share a row, state and battery share a card, and no section
  * label captions a control that already says what it is. With those, compact only has to
  * be a little tighter than the desktop — shrinking the type as well left half the screen
- * empty. While-agents-work and Timer keep rows of their own: one has a sentence that
- * should not be clipped, the other six chips that want the width.
+ * empty. While-agents-work shares a row with the display switch, and Timer keeps one of
+ * its own for the six chips that want the width.
  */
 const METRICS = {
   compact: { gutter: 16, gap: 14, pad: 16, icon: 44, title: 22, tile: "30%" as const },
@@ -619,7 +619,7 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
           {/* The phone gets the line that carries the meaning, not the one that repeats the title. */}
           {compact ? null : <Text style={{ color: theme.colors.foreground, fontSize: 14 }}>{strings.tagline}</Text>}
           <Text style={{ color: theme.colors.foregroundMuted, fontSize: 14 }}>
-            {strings.taglineDetail}
+            {strings.taglineDetail(data?.keepDisplay ?? false)}
           </Text>
         </View>
       </View>
@@ -679,19 +679,31 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
             </ModeCard>
           </View>
 
-          {/* A row each: one has a sentence to finish, the other six chips to lay out.
-              The row is what makes tile="100%" mean a width. ModeCard's flexBasis resolves
-              against its parent's main axis, and the content container's runs down the page,
-              so a card left as a direct child there is stretched to the full scroll height. */}
-          <View style={{ flexDirection: "row" }}>
+          {/* While agents work and the display share a row: one is a mode, the other a switch
+              that rides along with any mode, shown "on" the same way — by the border. A share under half leaves
+              room for the gap down to the narrowest phone, so the two never stack. The timer
+              below keeps a row of its own for its six chips. A row is what makes a tile's share
+              mean a width: ModeCard's flexBasis resolves against its parent's main axis, and the
+              content container's runs down the page, so a card left as a direct child there is
+              stretched to the full scroll height. */}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: m.gap }}>
             <ModeCard
               icon="Zap"
               title={strings.auto}
               detail={strings.autoDetail}
               selected={data.mode === "auto"}
               theme={theme}
-              tile="100%"
+              tile="45%"
               onPress={() => change.mutate({ mode: "auto" })}
+            />
+            <ModeCard
+              icon={data.keepDisplay ? "Monitor" : "MonitorOff"}
+              title={strings.displayLabel}
+              detail={strings.displayState(data.keepDisplay)}
+              selected={data.keepDisplay}
+              theme={theme}
+              tile="45%"
+              onPress={() => changeOptions.mutate({ keepDisplay: !data.keepDisplay })}
             />
           </View>
 

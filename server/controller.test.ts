@@ -38,6 +38,7 @@ function fakes(initial: Stored, running: () => number | null, lid?: ReturnType<t
   let stored = initial;
   const writes: Stored[] = [];
   const held: Array<number | undefined> = [];
+  const heldDisplay: boolean[] = [];
   let releases = 0;
   let active = false;
   let clock = Date.parse("2026-09-09T18:00:00.000Z");
@@ -47,9 +48,10 @@ function fakes(initial: Stored, running: () => number | null, lid?: ReturnType<t
     active: () => active,
     error: () => "",
     pid: () => (active ? 1 : null),
-    hold: (until) => {
+    hold: (until, keepDisplay = false) => {
       active = true;
       held.push(until);
+      heldDisplay.push(keepDisplay);
     },
     release: () => {
       if (active) releases += 1;
@@ -77,6 +79,7 @@ function fakes(initial: Stored, running: () => number | null, lid?: ReturnType<t
     keeper,
     writes,
     held,
+    heldDisplay,
     releaseCount: () => releases,
     sleepCount: () => sleepCalls,
     setWakeUrl: (url: string) => (wakeUrl = url),
@@ -88,7 +91,7 @@ function fakes(initial: Stored, running: () => number | null, lid?: ReturnType<t
 }
 
 test("start restores a stored 'on' and holds at once", async () => {
-  const f = fakes({ mode: "on", until: "", lidClosed: false }, () => 0);
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, lidClosed: false }, () => 0);
   await f.controller.start();
   assert.equal(f.keeper.active(), true);
   assert.equal(f.controller.status().mode, "on");
@@ -97,7 +100,7 @@ test("start restores a stored 'on' and holds at once", async () => {
 });
 
 test("set timer writes the deadline and holds with it", async () => {
-  const f = fakes({ mode: "off", until: "", lidClosed: false }, () => 0);
+  const f = fakes({ mode: "off", until: "", keepDisplay: false, lidClosed: false }, () => 0);
   await f.controller.start();
   const status = await f.controller.set({ mode: "timer", minutes: 180 });
   assert.equal(status.mode, "timer");
@@ -108,7 +111,7 @@ test("set timer writes the deadline and holds with it", async () => {
 });
 
 test("a tick past the deadline turns the timer off and releases", async () => {
-  const f = fakes({ mode: "timer", until: "2026-09-09T18:00:30.000Z", lidClosed: false }, () => 0);
+  const f = fakes({ mode: "timer", until: "2026-09-09T18:00:30.000Z", keepDisplay: false, lidClosed: false }, () => 0);
   await f.controller.start();
   assert.equal(f.keeper.active(), true);
   f.advance(31_000);
@@ -121,7 +124,7 @@ test("a tick past the deadline turns the timer off and releases", async () => {
 
 test("auto holds while agents run and releases after the grace period", async () => {
   let running: number | null = 2;
-  const f = fakes({ mode: "auto", until: "", lidClosed: false }, () => running);
+  const f = fakes({ mode: "auto", until: "", keepDisplay: false, lidClosed: false }, () => running);
   await f.controller.start();
   assert.equal(f.keeper.active(), true);
   assert.equal(f.controller.status().agents, 2);
@@ -136,7 +139,7 @@ test("auto holds while agents run and releases after the grace period", async ()
 });
 
 test("auto with no answer yet stays released and says so", async () => {
-  const f = fakes({ mode: "auto", until: "", lidClosed: false }, () => null);
+  const f = fakes({ mode: "auto", until: "", keepDisplay: false, lidClosed: false }, () => null);
   await f.controller.start();
   assert.equal(f.keeper.active(), false);
   assert.equal(f.controller.status().busy, false);
@@ -145,17 +148,17 @@ test("auto with no answer yet stays released and says so", async () => {
 });
 
 test("set off releases and writes", async () => {
-  const f = fakes({ mode: "on", until: "", lidClosed: false }, () => 0);
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, lidClosed: false }, () => 0);
   await f.controller.start();
   const status = await f.controller.set({ mode: "off" });
   assert.equal(status.active, false);
   assert.equal(f.keeper.active(), false);
-  assert.deepEqual(f.writes.at(-1), { mode: "off", until: "", lidClosed: false });
+  assert.deepEqual(f.writes.at(-1), { mode: "off", until: "", keepDisplay: false, lidClosed: false });
   f.controller.stop();
 });
 
 test("switching on to timer restarts the child with a deadline", async () => {
-  const f = fakes({ mode: "on", until: "", lidClosed: false }, () => 0);
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, lidClosed: false }, () => 0);
   await f.controller.start();
   assert.equal(f.held.at(-1), undefined);
   await f.controller.set({ mode: "timer", minutes: 60 });
@@ -163,19 +166,77 @@ test("switching on to timer restarts the child with a deadline", async () => {
   f.controller.stop();
 });
 
+test("the display switch reaches the child and is written down", async () => {
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, lidClosed: false }, () => 0);
+  await f.controller.start();
+  assert.equal(f.heldDisplay.at(-1), false);
+  const status = await f.controller.setOptions({ keepDisplay: true });
+  assert.equal(status.keepDisplay, true);
+  assert.equal(f.heldDisplay.at(-1), true);
+  assert.deepEqual(f.writes.at(-1), { mode: "on", until: "", keepDisplay: true, lidClosed: false });
+  f.controller.stop();
+});
+
+test("changing the display choice restarts the child, because caffeinate cannot be retold", async () => {
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, lidClosed: false }, () => 0);
+  await f.controller.start();
+  const before = f.releaseCount();
+  await f.controller.setOptions({ keepDisplay: true });
+  assert.equal(f.releaseCount(), before + 1);
+  assert.equal(f.keeper.active(), true);
+  f.controller.stop();
+});
+
+test("setting the display to what it already is neither writes nor restarts", async () => {
+  const f = fakes({ mode: "on", until: "", keepDisplay: true, lidClosed: false }, () => 0);
+  await f.controller.start();
+  const writes = f.writes.length;
+  const releases = f.releaseCount();
+  await f.controller.setOptions({ keepDisplay: true });
+  assert.equal(f.writes.length, writes);
+  assert.equal(f.releaseCount(), releases);
+  f.controller.stop();
+});
+
+test("a patch with both switches writes once, restarts once and syncs lid mode once", async () => {
+  const lid = fakeLid();
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, lidClosed: false }, () => 0, lid);
+  await f.controller.start();
+  const writes = f.writes.length;
+  const releases = f.releaseCount();
+  await f.controller.setOptions({ keepDisplay: true, lidClosed: true });
+  assert.equal(f.writes.length, writes + 1);
+  assert.equal(f.releaseCount(), releases + 1);
+  assert.deepEqual(lid.calls, ["forever"]);
+  assert.equal(f.heldDisplay.at(-1), true);
+  f.controller.stop();
+});
+
+test("the display switch leaves lid mode alone, and a mode change carries it", async () => {
+  const lid = fakeLid();
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, lidClosed: true }, () => 0, lid);
+  await f.controller.start();
+  await f.controller.setOptions({ keepDisplay: true });
+  assert.deepEqual(lid.calls, []);
+  await f.controller.set({ mode: "timer", minutes: 60 });
+  assert.equal(f.stored.keepDisplay, true);
+  assert.equal(f.heldDisplay.at(-1), true);
+  f.controller.stop();
+});
+
 test("the lid switch is written down and carried through a mode change", async () => {
-  const f = fakes({ mode: "on", until: "", lidClosed: false }, () => 0);
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, lidClosed: false }, () => 0);
   await f.controller.start();
   const status = await f.controller.setOptions({ lidClosed: true });
   assert.equal(status.lidClosed, true);
-  assert.deepEqual(f.writes.at(-1), { mode: "on", until: "", lidClosed: true });
+  assert.deepEqual(f.writes.at(-1), { mode: "on", until: "", keepDisplay: false, lidClosed: true });
   await f.controller.set({ mode: "timer", minutes: 60 });
   assert.equal(f.stored.lidClosed, true);
   f.controller.stop();
 });
 
 test("the lid switch does not restart the child: it has nothing to do with caffeinate", async () => {
-  const f = fakes({ mode: "on", until: "", lidClosed: false }, () => 0);
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, lidClosed: false }, () => 0);
   await f.controller.start();
   const releases = f.releaseCount();
   await f.controller.setOptions({ lidClosed: true });
@@ -186,7 +247,7 @@ test("the lid switch does not restart the child: it has nothing to do with caffe
 
 test("setting the lid switch to what it already is writes nothing", async () => {
   const lid = fakeLid();
-  const f = fakes({ mode: "on", until: "", lidClosed: true }, () => 0, lid);
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, lidClosed: true }, () => 0, lid);
   await f.controller.start();
   const writes = f.writes.length;
   await f.controller.setOptions({ lidClosed: true });
@@ -197,7 +258,7 @@ test("setting the lid switch to what it already is writes nothing", async () => 
 
 test("with the lid switch on, a timer turns lid mode on until the timer's own deadline", async () => {
   const lid = fakeLid();
-  const f = fakes({ mode: "off", until: "", lidClosed: true }, () => 0, lid);
+  const f = fakes({ mode: "off", until: "", keepDisplay: false, lidClosed: true }, () => 0, lid);
   await f.controller.start();
   await f.controller.set({ mode: "timer", minutes: 120 });
   assert.equal(f.stored.until, "2026-09-09T20:00:00.000Z");
@@ -207,7 +268,7 @@ test("with the lid switch on, a timer turns lid mode on until the timer's own de
 
 test("with the lid switch on, On turns lid mode on with no end", async () => {
   const lid = fakeLid();
-  const f = fakes({ mode: "timer", until: "2026-09-09T19:00:00.000Z", lidClosed: true }, () => 0, lid);
+  const f = fakes({ mode: "timer", until: "2026-09-09T19:00:00.000Z", keepDisplay: false, lidClosed: true }, () => 0, lid);
   await f.controller.start();
   await f.controller.set({ mode: "on" });
   assert.deepEqual(lid.calls, ["forever"]);
@@ -217,7 +278,7 @@ test("with the lid switch on, On turns lid mode on with no end", async () => {
 test("Off and Auto turn lid mode off; the switch stays on", async () => {
   for (const mode of ["off", "auto"] as const) {
     const lid = fakeLid();
-    const f = fakes({ mode: "off", until: "", lidClosed: true }, () => 0, lid);
+    const f = fakes({ mode: "off", until: "", keepDisplay: false, lidClosed: true }, () => 0, lid);
     await f.controller.start();
     await f.controller.set({ mode: "on" });
     await f.controller.set({ mode });
@@ -229,7 +290,7 @@ test("Off and Auto turn lid mode off; the switch stays on", async () => {
 
 test("turning the switch on mid-timer covers the rest of the timer; off ends lid mode", async () => {
   const lid = fakeLid();
-  const f = fakes({ mode: "off", until: "", lidClosed: false }, () => 0, lid);
+  const f = fakes({ mode: "off", until: "", keepDisplay: false, lidClosed: false }, () => 0, lid);
   await f.controller.start();
   await f.controller.set({ mode: "timer", minutes: 60 });
   assert.deepEqual(lid.calls, [], "switch off: the lid sleeps the Mac as usual");
@@ -244,7 +305,7 @@ test("turning the switch on mid-timer covers the rest of the timer; off ends lid
 
 test("an Off pressed while On is still switching lid mode on still ends with lid mode off", async () => {
   const lid = fakeLid(30);
-  const f = fakes({ mode: "off", until: "", lidClosed: true }, () => 0, lid);
+  const f = fakes({ mode: "off", until: "", keepDisplay: false, lidClosed: true }, () => 0, lid);
   await f.controller.start();
   const on = f.controller.set({ mode: "on" });
   await new Promise((resolve) => setTimeout(resolve, 5));
@@ -258,7 +319,7 @@ test("an Off pressed while On is still switching lid mode on still ends with lid
 
 test("a timer already spent but not yet ticked to Off does not switch lid mode on", async () => {
   const lid = fakeLid();
-  const f = fakes({ mode: "timer", until: "2026-09-09T18:30:00.000Z", lidClosed: false }, () => 0, lid);
+  const f = fakes({ mode: "timer", until: "2026-09-09T18:30:00.000Z", keepDisplay: false, lidClosed: false }, () => 0, lid);
   await f.controller.start();
   f.advance(31 * 60_000);
   await f.controller.setOptions({ lidClosed: true });
@@ -268,7 +329,7 @@ test("a timer already spent but not yet ticked to Off does not switch lid mode o
 
 test("after the permission arrives, a running On gets its lid mode", async () => {
   const lid = fakeLid();
-  const f = fakes({ mode: "on", until: "", lidClosed: true }, () => 0, lid);
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, lidClosed: true }, () => 0, lid);
   await f.controller.start();
   assert.deepEqual(lid.calls, [], "start alone changes nothing");
   await f.controller.syncLid();
@@ -278,7 +339,7 @@ test("after the permission arrives, a running On gets its lid mode", async () =>
 
 test("lid mode that ended by itself is not turned back on by a tick", async () => {
   const lid = fakeLid();
-  const f = fakes({ mode: "off", until: "", lidClosed: true }, () => 0, lid);
+  const f = fakes({ mode: "off", until: "", keepDisplay: false, lidClosed: true }, () => 0, lid);
   await f.controller.start();
   await f.controller.set({ mode: "on" });
   lid.endByItself();
@@ -290,7 +351,7 @@ test("lid mode that ended by itself is not turned back on by a tick", async () =
 
 test("lid mode Caffeine did not start is left alone by a mode change", async () => {
   const lid = fakeLid();
-  const f = fakes({ mode: "on", until: "", lidClosed: true }, () => 0, lid);
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, lidClosed: true }, () => 0, lid);
   // Sleep switched off by hand: on, with no deadline and no end of Caffeine's.
   (lid.status() as { on: boolean }).on = true;
   await f.controller.start();
@@ -300,10 +361,10 @@ test("lid mode Caffeine did not start is left alone by a mode change", async () 
 });
 
 test("the battery is read once a tick and reaches the status", async () => {
-  const f = fakes({ mode: "off", until: "", lidClosed: false }, () => 0);
+  const f = fakes({ mode: "off", until: "", keepDisplay: false, lidClosed: false }, () => 0);
   let reads = 0;
   const controller = createController({
-    read: async () => ({ mode: "off", until: "", lidClosed: false }),
+    read: async () => ({ mode: "off", until: "", keepDisplay: false, lidClosed: false }),
     write: async () => undefined,
     keeper: f.keeper,
     runningCount: async () => 0,
@@ -322,14 +383,14 @@ test("the battery is read once a tick and reaches the status", async () => {
 });
 
 test("a controller with no battery probe simply has none", async () => {
-  const f = fakes({ mode: "off", until: "", lidClosed: false }, () => 0);
+  const f = fakes({ mode: "off", until: "", keepDisplay: false, lidClosed: false }, () => 0);
   await f.controller.start();
   assert.equal(f.controller.status().battery, null);
   f.controller.stop();
 });
 
 test("a half-hour timer lands thirty minutes out", async () => {
-  const f = fakes({ mode: "off", until: "", lidClosed: false }, () => 0);
+  const f = fakes({ mode: "off", until: "", keepDisplay: false, lidClosed: false }, () => 0);
   await f.controller.start();
   const status = await f.controller.set({ mode: "timer", minutes: 30 });
   assert.equal(status.until, "2026-09-09T18:30:00.000Z");
@@ -338,7 +399,7 @@ test("a half-hour timer lands thirty minutes out", async () => {
 });
 
 test("an empty patch writes nothing and leaves the child alone", async () => {
-  const f = fakes({ mode: "on", until: "", lidClosed: true }, () => 0);
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, lidClosed: true }, () => 0);
   await f.controller.start();
   const writes = f.writes.length;
   const releases = f.releaseCount();
@@ -352,7 +413,7 @@ test("an empty patch writes nothing and leaves the child alone", async () => {
 });
 
 test("a spent timer keeps the lid switch", async () => {
-  const f = fakes({ mode: "timer", until: "2026-09-09T18:30:00.000Z", lidClosed: true }, () => 0);
+  const f = fakes({ mode: "timer", until: "2026-09-09T18:30:00.000Z", keepDisplay: false, lidClosed: true }, () => 0);
   await f.controller.start();
   f.advance(31 * 60_000);
   const status = await f.controller.tick();
@@ -362,7 +423,7 @@ test("a spent timer keeps the lid switch", async () => {
 });
 
 test("the wake link is read afresh on every status", async () => {
-  const f = fakes({ mode: "off", until: "", lidClosed: false }, () => 0);
+  const f = fakes({ mode: "off", until: "", keepDisplay: false, lidClosed: false }, () => 0);
   await f.controller.start();
   assert.equal(f.controller.status().wakeUrl, "");
 
@@ -374,7 +435,7 @@ test("the wake link is read afresh on every status", async () => {
 });
 
 test("sleep lets the hold go before asking the Mac to suspend", async () => {
-  const f = fakes({ mode: "on", until: "", lidClosed: false }, () => 0);
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, lidClosed: false }, () => 0);
   await f.controller.start();
   assert.equal(f.keeper.active(), true);
   const releases = f.releaseCount();
@@ -393,7 +454,7 @@ test("sleep lets the hold go before asking the Mac to suspend", async () => {
 });
 
 test("the hold comes back on the next tick after a sleep", async () => {
-  const f = fakes({ mode: "on", until: "", lidClosed: false }, () => 0);
+  const f = fakes({ mode: "on", until: "", keepDisplay: false, lidClosed: false }, () => 0);
   await f.controller.start();
   f.controller.sleep();
   assert.equal(f.keeper.active(), false);

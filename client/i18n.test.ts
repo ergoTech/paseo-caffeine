@@ -86,6 +86,8 @@ test("every Command Center row names the plugin", () => {
       strings.commandOn,
       strings.commandTimer(3),
       strings.commandAuto,
+      strings.commandDisplayOn,
+      strings.commandDisplayOff,
     ];
     for (const row of rows) assert.ok(row.startsWith("Caffeine: "), `${locale}: ${row}`);
   }

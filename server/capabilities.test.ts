@@ -6,6 +6,7 @@ import { capabilities, describeCaffeine, describeRpc, OPERATIONS } from "./capab
 // What a caller would send for each operation; the ones left out take no arguments.
 const EXAMPLES: Record<string, Record<string, unknown>> = {
   keep_awake_for: { minutes: 120 },
+  keep_display: { keepDisplay: true },
   lid_closed: { lidClosed: true },
 };
 

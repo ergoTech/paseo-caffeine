@@ -70,6 +70,7 @@ export function createController(deps: ControllerDeps): Controller {
       agents,
       error: deps.keeper.error(),
       tickAt,
+      keepDisplay: stored.keepDisplay,
       lidClosed: stored.lidClosed,
       wakeUrl: deps.wakeUrl?.() ?? "",
       battery,
@@ -139,7 +140,7 @@ export function createController(deps: ControllerDeps): Controller {
     }
 
     if (decision.active) {
-      deps.keeper.hold(stored.mode === "timer" ? Date.parse(stored.until) : undefined);
+      deps.keeper.hold(stored.mode === "timer" ? Date.parse(stored.until) : undefined, stored.keepDisplay);
     } else {
       deps.keeper.release();
     }
@@ -171,12 +172,13 @@ export function createController(deps: ControllerDeps): Controller {
     status: snapshot,
 
     set: (input) => oneAtATime(async () => {
-      // The lid switch rides through a mode change untouched: it says what the timer and
-      // On mean, not which of them is running.
+      // The switches ride through a mode change untouched: the display is a property of
+      // the machine the user is sitting at, and the lid switch says what the timer and On
+      // mean, not which of them is running.
       const next: Stored =
         input.mode === "timer"
-          ? { mode: "timer", until: untilForMinutes(now(), input.minutes), lidClosed: stored.lidClosed }
-          : { mode: input.mode, until: "", lidClosed: stored.lidClosed };
+          ? { ...stored, mode: "timer", until: untilForMinutes(now(), input.minutes) }
+          : { ...stored, mode: input.mode, until: "" };
       // A different deadline or a different mode needs a child with different
       // arguments, so the old one goes first and reconcile() starts the right one.
       if (next.mode !== stored.mode || next.until !== stored.until) deps.keeper.release();
@@ -187,12 +189,19 @@ export function createController(deps: ControllerDeps): Controller {
     }),
 
     setOptions: (patch) => oneAtATime(async () => {
-      const next: Stored = { ...stored, lidClosed: patch.lidClosed ?? stored.lidClosed };
-      if (next.lidClosed !== stored.lidClosed) {
-        stored = next;
-        await deps.write(stored);
-        await syncLid();
-      }
+      const next: Stored = {
+        ...stored,
+        keepDisplay: patch.keepDisplay ?? stored.keepDisplay,
+        lidClosed: patch.lidClosed ?? stored.lidClosed,
+      };
+      if (next.keepDisplay === stored.keepDisplay && next.lidClosed === stored.lidClosed) return reconcile();
+      // caffeinate cannot be told to drop -d while it runs, so the child goes and
+      // reconcile() starts one with the right arguments.
+      if (next.keepDisplay !== stored.keepDisplay) deps.keeper.release();
+      const lidChanged = next.lidClosed !== stored.lidClosed;
+      stored = next;
+      await deps.write(stored);
+      if (lidChanged) await syncLid();
       return reconcile();
     }),
 

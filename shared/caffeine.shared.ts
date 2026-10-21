@@ -74,6 +74,8 @@ export const status = z.object({
   agents: z.number().int().nonnegative(),
   error: z.string().default(""),
   tickAt: z.string().default(""),
+  /** Whether the display is held awake along with the system. */
+  keepDisplay: z.boolean().default(false),
   /** Whether the timer and On also let the lid close (lid mode for the same time). */
   lidClosed: z.boolean().default(false),
   /**
@@ -97,6 +99,7 @@ export const setInput = z.discriminatedUnion("mode", [
 
 /** A patch: whatever is left out keeps the value it already had. */
 export const setOptionsInput = z.object({
+  keepDisplay: z.boolean().optional(),
   lidClosed: z.boolean().optional(),
 });
 

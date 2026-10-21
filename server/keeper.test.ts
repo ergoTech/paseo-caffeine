@@ -94,14 +94,20 @@ function recordedArgs(hold: (keeper: ReturnType<typeof createKeeper>) => void): 
   return seen[0] ?? [];
 }
 
-test("the display is left to sleep", () => {
+test("the display is left to sleep unless asked for", () => {
   const args = recordedArgs((keeper) => keeper.hold());
   assert.deepEqual(args.slice(1, 3), ["-i", "-s"]);
   assert.equal(args.includes("-d"), false);
 });
 
-test("a timer adds -t and still leaves the display alone", () => {
-  const args = recordedArgs((keeper) => keeper.hold(1_000_000 + 60_000));
-  assert.equal(args.includes("-d"), false);
+test("keeping the display adds -d", () => {
+  const args = recordedArgs((keeper) => keeper.hold(undefined, true));
+  assert.equal(args.includes("-d"), true);
+  assert.equal(args.includes("-i"), true);
+});
+
+test("a timer and the display can be held together", () => {
+  const args = recordedArgs((keeper) => keeper.hold(1_000_000 + 60_000, true));
+  assert.equal(args.includes("-d"), true);
   assert.deepEqual(args.slice(-2), ["-t", "60"]);
 });

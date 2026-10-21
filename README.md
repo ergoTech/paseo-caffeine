@@ -14,10 +14,12 @@ gives Paseo the same lever with three positions:
 | **While agents work** | The Mac does not sleep while at least one Paseo agent on this host is running, and for three minutes after the last one went quiet. |
 
 Off, On and **Sleep now**, which sends the Mac under from wherever you are, share the top
-row. Below the modes is the link that wakes the Mac again.
+row; **Keep display on** sits next to While agents work. Below the modes is the link that
+wakes the Mac again.
 
-Only system sleep is held; the display sleeps as usual. A closed lid still sleeps a
-MacBook, `caffeinate` or not.
+Only system sleep is held and the display sleeps as usual — unless **Keep display on** is
+switched on, which holds both whenever the Mac is held. A closed lid still sleeps a MacBook,
+`caffeinate` or not.
 
 **Lid can close**, the switch on the timer, is the one exception to that. With it on, the
 timer lets the Mac run with the lid shut until its deadline, and On lets it run with no end;
@@ -67,11 +69,12 @@ The server half runs `caffeinate -i -s -w <its own pid>` as a child process whil
 policy says so, and re-evaluates every thirty seconds: it asks the daemon how many agents
 are running, reads the battery, moves a busy window, and starts or stops the child. `-w`
 ties the child to the plugin, so a plugin killed without cleanup takes its `caffeinate`
-down with it. Timer holds add `-t` as a second guard.
+down with it. Timer holds add `-t` as a second guard, and **Keep display on** adds `-d`.
 
-**Lid can close** rides on its own RPC that takes a patch, rather than on the mode: it
-says what the timer and On mean, not which of them runs, and it survives a mode change and
-a spent timer alike. The controller turns lid mode on and off to match only when a person
+**Keep display on** and **Lid can close** ride on their own RPC that takes a patch, rather
+than on the mode: the display is a property of the machine you sit at, and the lid switch
+says what the timer and On mean, not which of them runs. Both survive a mode change and a
+spent timer alike. The controller turns lid mode on and off to match only when a person
 changes the mode or the switch, never on a tick.
 
 ## Sleeping, and getting back
@@ -210,8 +213,10 @@ themselves through the same `formatRemaining` the countdown uses — 30 becomes 
 
 **The host's `SettingsSwitch` needs a full-width row.** Given half a phone's width it
 wraps the label, wraps the hint, and drops the toggle onto a line of its own — three
-ragged lines where the rest of the page has tidy tiles. The lid switch is a
-chip inside the timer's card instead, showing "on" the same way a chosen length does. **Sleep now** is the same tile shape
+ragged lines where the rest of the page has tidy tiles. The display toggle is a
+`ModeCard` instead, showing "on" the same way a chosen mode does: by the border, with
+`MonitorOff`/`Monitor` carrying the state as well. The lid switch is a chip inside the
+timer's card, showing "on" the same way a chosen length does. **Sleep now** is the same tile shape
 without a state to show — it borrows the selected look only while the request is in
 flight, which on a phone is the last thing rendered before the connection dies. The app ships the whole lucide
 set, which is worth checking in

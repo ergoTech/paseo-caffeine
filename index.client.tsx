@@ -1,5 +1,5 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
-import { getStatus, setMode, sleepNow } from "./shared/caffeine.shared.ts";
+import { getStatus, setMode, setOptions, sleepNow } from "./shared/caffeine.shared.ts";
 import { detectAppLocale, t } from "./client/i18n.ts";
 import { CaffeineSurface } from "./client/main.client.tsx";
 import { contributeLidAlert } from "./client/lid-alert.tsx";
@@ -35,6 +35,25 @@ export default function contribute(client: PluginClientContext) {
       keywords: ["caffeine", "sleep", "awake"],
       async onSelect({ rpc }) {
         await rpc(setMode, command.input);
+      },
+    });
+  }
+
+  // Ids start with a letter: the app refuses one that does not, and a single bad item
+  // takes the whole client contribution down with it, sidebar entry included.
+  const displayCommands = [
+    { id: "display-on", title: strings.commandDisplayOn, keepDisplay: true },
+    { id: "display-off", title: strings.commandDisplayOff, keepDisplay: false },
+  ];
+  for (const command of displayCommands) {
+    client.addCommandCenterItem({
+      id: command.id,
+      title: command.title,
+      icon: "Coffee",
+      context: "global",
+      keywords: ["caffeine", "display", "screen", "sleep"],
+      async onSelect({ rpc }) {
+        await rpc(setOptions, { keepDisplay: command.keepDisplay });
       },
     });
   }
