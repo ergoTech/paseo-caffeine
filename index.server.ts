@@ -1,6 +1,6 @@
 import { hostname } from "node:os";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
-import { getStatus, runWarmup, setLid, setMode, setOptions, setWarmup, setupLid, sleepNow } from "./shared/caffeine.shared.ts";
+import { getStatus, runWarmup, setLid, setLidDisplay, setMode, setOptions, setWarmup, setupLid, sleepNow } from "./shared/caffeine.shared.ts";
 import { createWarmup, systemWarmupDeps } from "./server/warmup.server.ts";
 import { createLid, systemLidDeps } from "./server/lid.server.ts";
 import { createAgentsProbe } from "./server/agents.server.ts";
@@ -102,6 +102,7 @@ export default function contribute(server: PluginServerContext) {
     probe.remember(paseo);
     const instance = await startedServer();
     if (input.lid === "on") await lid.enable(input.minutes);
+    else if (input.lid === "forever") await lid.enable("forever");
     else await lid.disable("turned off");
     return instance.status();
   });
@@ -127,11 +128,26 @@ export default function contribute(server: PluginServerContext) {
     return instance.status();
   });
 
+  server.handle(setLidDisplay, async (input, { paseo }) => {
+    probe.remember(paseo);
+    const instance = await startedServer();
+    await lid.setDarkWhenClosed(input.darkWhenClosed);
+    return instance.status();
+  });
+
   // For God Mode: the operations above, described for an assistant that cannot see them.
   server.handle(describeRpc, () => describeCaffeine());
 
+  // The lid is looked at once a minute: putting the display to sleep a little late is fine,
+  // and it is asked once per closing, never again while the lid stays shut.
+  const lidWatch = setInterval(() => void lid.checkClosed().catch(() => undefined), LID_CHECK_MS);
+  lidWatch.unref?.();
+
   return () => {
+    clearInterval(lidWatch);
     controller.stop();
     waker.stop();
   };
 }
+
+const LID_CHECK_MS = 60_000;

@@ -39,6 +39,12 @@ export const lidStatus = z.object({
   until: z.string().default(""),
   /** The length that was picked; 0 when off or set outside Caffeine. */
   minutes: z.number().int().nonnegative().default(0),
+  /** On with no end. */
+  forever: z.boolean().default(false),
+  /** Why lid mode last ended by itself ("battery", "heat"), or "". */
+  ended: z.enum(["", "battery", "heat"]).default(""),
+  /** Whether the display goes to sleep when the lid closes while lid mode is on. */
+  darkWhenClosed: z.boolean().default(true),
   setup: lidSetup.default("unknown"),
   /** "needs-setup", a failed command's message, or "". */
   error: z.string().default(""),
@@ -76,7 +82,7 @@ export const status = z.object({
    */
   wakeUrl: z.string().default(""),
   battery: battery.nullable().default(null),
-  lid: lidStatus.default({ on: false, until: "", minutes: 0, setup: "unknown", error: "" }),
+  lid: lidStatus.default({ on: false, until: "", minutes: 0, forever: false, ended: "", darkWhenClosed: true, setup: "unknown", error: "" }),
   warmup: warmupStatus.default({ enabled: false, time: "06:00", nextAt: "", lastAt: "", results: [], running: false }),
 });
 
@@ -151,6 +157,7 @@ export const setLid = defineRpc({
   name: "caffeine.lid",
   input: z.discriminatedUnion("lid", [
     z.object({ lid: z.literal("on"), minutes: lidMinutes }),
+    z.object({ lid: z.literal("forever") }),
     z.object({ lid: z.literal("off") }),
   ]),
   output: status,
@@ -177,5 +184,12 @@ export const setWarmup = defineRpc({
 export const runWarmup = defineRpc({
   name: "caffeine.warmup-now",
   input: z.object({}),
+  output: status,
+});
+
+/** Lid mode's display option: put the display to sleep when the lid closes. */
+export const setLidDisplay = defineRpc({
+  name: "caffeine.lid-display",
+  input: z.object({ darkWhenClosed: z.boolean() }),
   output: status,
 });

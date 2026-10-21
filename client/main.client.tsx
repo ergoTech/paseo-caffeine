@@ -5,7 +5,7 @@ import { Icon } from "@getpaseo/plugin/client/react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Linking, Pressable, ScrollView, Text, View } from "react-native";
-import { SLEEP_DELAY_MS, type Battery, type LidMinutes, type SetInput, type SetOptionsInput, type Status, getStatus, runWarmup, setLid, setMode, setOptions, setWarmup, setupLid, sleepNow } from "../shared/caffeine.shared.ts";
+import { SLEEP_DELAY_MS, type Battery, type LidMinutes, type SetInput, type SetOptionsInput, type Status, getStatus, runWarmup, setLid, setLidDisplay, setMode, setOptions, setWarmup, setupLid, sleepNow } from "../shared/caffeine.shared.ts";
 import { type Strings, detectAppLocale, formatRemaining, t } from "./i18n.ts";
 import { SILENCE_TIMEOUT_MS, type SleepEvent, type SleepPhase, isSleepInFlight, nextSleepPhase } from "./sleep-phase.ts";
 
@@ -389,7 +389,9 @@ function LidCard({
   now,
   busy,
   onPick,
+  onForever,
   onStop,
+  onDark,
   onSetup,
 }: {
   status: Status;
@@ -398,7 +400,9 @@ function LidCard({
   now: number;
   busy: boolean;
   onPick(minutes: LidMinutes): void;
+  onForever(): void;
   onStop(): void;
+  onDark(value: boolean): void;
   onSetup(): void;
 }) {
   const { lid } = status;
@@ -409,11 +413,14 @@ function LidCard({
     needsSetup && !lid.on
       ? strings.lidSetup
       : lid.on
-        ? lid.until === ""
-          ? strings.lidOnNoTimer
-          : strings.lidOn(formatRemaining(remainingMs, strings))
+        ? lid.forever
+          ? strings.lidOnForever
+          : lid.until === ""
+            ? strings.lidOnNoTimer
+            : strings.lidOn(formatRemaining(remainingMs, strings))
         : strings.lidOff;
   const failed = lid.error !== "" && lid.error !== "needs-setup" ? strings.lidFailed(lid.error) : "";
+  const endedNote = lid.on ? "" : lid.ended === "heat" ? strings.lidEndedHeat : lid.ended === "battery" ? strings.lidEndedBattery : "";
 
   return (
     <View style={{ flexDirection: "row" }}>
@@ -439,8 +446,22 @@ function LidCard({
               />
             ))
           )}
+          {needsSetup ? null : (
+            <Chip label={strings.lidForever} selected={lid.on && lid.forever} theme={theme} onPress={() => (busy ? undefined : onForever())} />
+          )}
           {lid.on ? <Chip label={strings.lidStop} selected={false} theme={theme} onPress={() => (busy ? undefined : onStop())} /> : null}
         </View>
+        {needsSetup ? null : (
+          <View style={{ flexDirection: "row", marginTop: 4 }}>
+            <Chip
+              label={strings.lidDark}
+              selected={lid.darkWhenClosed}
+              theme={theme}
+              onPress={() => (busy ? undefined : onDark(!lid.darkWhenClosed))}
+            />
+          </View>
+        )}
+        {endedNote !== "" ? <Text style={{ color: theme.colors.statusWarning, fontSize: 12 }}>{endedNote}</Text> : null}
         {failed !== "" ? <Text style={{ color: theme.colors.statusDanger ?? theme.colors.foregroundMuted, fontSize: 12 }}>{failed}</Text> : null}
       </ModeCard>
     </View>
@@ -554,6 +575,12 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
 
   const changeOptions = useMutation({
     mutationFn: (patch: SetOptionsInput) => applyOptions(patch),
+    onSuccess: (status) => queryClient.setQueryData(QUERY_KEY, status),
+  });
+
+  const askLidDisplay = useRpc(setLidDisplay);
+  const lidDisplay = useMutation({
+    mutationFn: (darkWhenClosed: boolean) => askLidDisplay({ darkWhenClosed }),
     onSuccess: (status) => queryClient.setQueryData(QUERY_KEY, status),
   });
 
@@ -734,8 +761,10 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
             theme={theme}
             strings={strings}
             now={now}
-            busy={lid.isPending || lidSetupRun.isPending}
+            busy={lid.isPending || lidSetupRun.isPending || lidDisplay.isPending}
             onPick={(minutes) => lid.mutate({ lid: "on", minutes })}
+            onForever={() => lid.mutate({ lid: "forever" })}
+            onDark={(darkWhenClosed) => lidDisplay.mutate(darkWhenClosed)}
             onStop={() => lid.mutate({ lid: "off" })}
             onSetup={() => lidSetupRun.mutate()}
           />
