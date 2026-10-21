@@ -10,7 +10,7 @@ import { GRACE_MS } from "./policy.ts";
 function fakeLid(delayMs = 0) {
   const calls: string[] = [];
   const pause = () => new Promise((resolve) => setTimeout(resolve, delayMs));
-  let state: LidStatus = { on: false, until: "", minutes: 0, forever: false, ended: "", setup: "ready", error: "" };
+  let state: LidStatus = { on: false, until: "", minutes: 0, forever: false, ended: "", stopped: "", setup: "ready", error: "" };
   return {
     calls,
     tick: async () => undefined,
@@ -335,6 +335,32 @@ test("after the permission arrives, a running On gets its lid mode", async () =>
   await f.controller.syncLid();
   assert.deepEqual(lid.calls, ["forever"]);
   f.controller.stop();
+});
+
+test("turned off by something else, lid mode comes back only when asked: as the timer says", async () => {
+  const lid = fakeLid();
+  const f = fakes({ mode: "off", until: "", keepDisplay: false, lidClosed: true }, () => 0, lid);
+  await f.controller.start();
+  await f.controller.set({ mode: "timer", minutes: 60 });
+  lid.endByItself();
+  await f.controller.tick();
+  assert.deepEqual(lid.calls, ["until 2026-09-09T19:00:00.000Z"]);
+  f.advance(15 * 60_000);
+  await f.controller.syncLid();
+  assert.deepEqual(lid.calls, ["until 2026-09-09T19:00:00.000Z", "until 2026-09-09T19:00:00.000Z"]);
+  assert.equal(lid.status().minutes, 45, "the rest of the timer, not a new length");
+  f.controller.stop();
+});
+
+test("asking for lid mode back under Auto or with the switch off does nothing", async () => {
+  for (const [mode, lidClosed] of [["auto", true], ["on", false]] as const) {
+    const lid = fakeLid();
+    const f = fakes({ mode, until: "", keepDisplay: false, lidClosed }, () => 0, lid);
+    await f.controller.start();
+    await f.controller.syncLid();
+    assert.deepEqual(lid.calls, [], `${mode}, switch ${lidClosed}`);
+    f.controller.stop();
+  }
 });
 
 test("lid mode that ended by itself is not turned back on by a tick", async () => {

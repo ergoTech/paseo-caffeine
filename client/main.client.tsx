@@ -5,7 +5,7 @@ import { Icon } from "@getpaseo/plugin/client/react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Linking, Pressable, ScrollView, Text, View } from "react-native";
-import { SLEEP_DELAY_MS, type Battery, type SetInput, type SetOptionsInput, type Status, getStatus, runWarmup, setMode, setOptions, setWarmup, setupLid, sleepNow } from "../shared/caffeine.shared.ts";
+import { SLEEP_DELAY_MS, type Battery, type SetInput, type SetOptionsInput, type Status, getStatus, runWarmup, setLid, setMode, setOptions, setWarmup, setupLid, sleepNow } from "../shared/caffeine.shared.ts";
 import { type Strings, detectAppLocale, formatRemaining, t } from "./i18n.ts";
 import { SILENCE_TIMEOUT_MS, type SleepEvent, type SleepPhase, isSleepInFlight, nextSleepPhase } from "./sleep-phase.ts";
 
@@ -396,6 +396,16 @@ function useSleepTile(poll: { dataUpdatedAt: number; errorUpdatedAt: number; isE
  * The address is the Mac's own on the local network, so the link only carries from
  * inside the house or through the VPN that puts you there.
  */
+/** Who turned lid mode off, in words; a reason this client does not know reads as plain "off". */
+function pausedReason(lid: Status["lid"], strings: Strings): string {
+  if (lid.ended === "battery") return strings.lidEndedBattery;
+  if (lid.ended === "heat") return strings.lidEndedHeat;
+  if (lid.stopped === "sleep") return strings.lidStoppedSleep;
+  if (lid.stopped === "off") return strings.lidStoppedOff;
+  if (lid.stopped === "manual") return strings.lidStoppedManual;
+  return strings.lidStoppedUnknown;
+}
+
 /**
  * The timer's lid switch: with it on, the timer and On also let the lid close, for exactly as
  * long as they last. It is the one control that changes a system setting rather than holding
@@ -410,6 +420,7 @@ function LidSwitch({
   busy,
   onToggle,
   onSetup,
+  onResume,
 }: {
   status: Status;
   theme: PluginTheme;
@@ -418,18 +429,25 @@ function LidSwitch({
   busy: boolean;
   onToggle(lidClosed: boolean): void;
   onSetup(): void;
+  onResume(): void;
 }) {
   const { lid } = status;
   const needsSetup = lid.setup === "needs-setup";
   const ours = lid.forever || lid.until !== "";
   const remainingMs = lid.until === "" ? 0 : Math.max(0, Date.parse(lid.until) - now);
+  // The switch is on and a timer or On is running, yet lid mode is off: Sleep now, the header,
+  // a low battery or heat turned it off, and nothing turns it back on by itself. Said plainly,
+  // with a way back, because a closed lid now sleeps the Mac.
+  const paused = !needsSetup && !lid.on && status.lidClosed && (status.mode === "timer" || status.mode === "on");
   let detail: string;
   if (needsSetup && !lid.on) detail = strings.lidSetup;
   else if (lid.on && !ours) detail = strings.lidOnNoTimer;
   else if (lid.on) detail = lid.forever ? strings.lidOnForever : strings.lidOn(formatRemaining(remainingMs, strings));
+  else if (paused) detail = `${pausedReason(lid, strings)} ${strings.lidPaused}`;
   else detail = status.lidClosed ? strings.lidIdle : strings.lidOff;
   const failed = lid.error !== "" && lid.error !== "needs-setup" ? strings.lidFailed(lid.error) : "";
-  const endedNote = lid.on ? "" : lid.ended === "heat" ? strings.lidEndedHeat : lid.ended === "battery" ? strings.lidEndedBattery : "";
+  // When paused the reason is already the detail; a second line would say it twice.
+  const endedNote = lid.on || paused ? "" : lid.ended === "heat" ? strings.lidEndedHeat : lid.ended === "battery" ? strings.lidEndedBattery : "";
   return (
     <View style={{ gap: 6, marginTop: 6, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
       {/* Presses are ignored while one is in flight: a "turn off" overtaken by a "turn on" is
@@ -442,8 +460,9 @@ function LidSwitch({
         {!needsSetup || status.lidClosed ? (
           <Chip label={strings.lidLabel} selected={status.lidClosed} theme={theme} onPress={() => (busy ? undefined : onToggle(!status.lidClosed))} />
         ) : null}
+        {paused ? <Chip label={strings.lidResume} selected={false} theme={theme} onPress={() => (busy ? undefined : onResume())} /> : null}
       </View>
-      <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{detail}</Text>
+      <Text style={{ color: paused ? theme.colors.statusWarning : theme.colors.foregroundMuted, fontSize: 12 }}>{detail}</Text>
       {endedNote !== "" ? <Text style={{ color: theme.colors.statusWarning, fontSize: 12 }}>{endedNote}</Text> : null}
       {failed !== "" ? <Text style={{ color: theme.colors.statusDanger ?? theme.colors.foregroundMuted, fontSize: 12 }}>{failed}</Text> : null}
     </View>
@@ -539,6 +558,7 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
   const askWarmup = useRpc(setWarmup);
   const askWarmupNow = useRpc(runWarmup);
   const askLidSetup = useRpc(setupLid);
+  const askLid = useRpc(setLid);
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError, dataUpdatedAt, errorUpdatedAt } = useQuery({
@@ -567,6 +587,11 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
   // Answers once every login has been warmed up: seconds per account.
   const warmupRun = useMutation({
     mutationFn: () => askWarmupNow({}),
+    onSuccess: (status) => queryClient.setQueryData(QUERY_KEY, status),
+  });
+
+  const lidResume = useMutation({
+    mutationFn: () => askLid({ lid: "on" }),
     onSuccess: (status) => queryClient.setQueryData(QUERY_KEY, status),
   });
 
@@ -725,9 +750,10 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
                 theme={theme}
                 strings={strings}
                 now={now}
-                busy={changeOptions.isPending || change.isPending || lidSetupRun.isPending}
+                busy={changeOptions.isPending || change.isPending || lidSetupRun.isPending || lidResume.isPending}
                 onToggle={(lidClosed) => changeOptions.mutate({ lidClosed })}
                 onSetup={() => lidSetupRun.mutate()}
+                onResume={() => lidResume.mutate()}
               />
             </ModeCard>
           </View>

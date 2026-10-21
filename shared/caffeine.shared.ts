@@ -47,6 +47,12 @@ export const lidStatus = z.object({
   forever: z.boolean().default(false),
   /** Why lid mode last ended by itself ("battery", "heat"), or "". */
   ended: z.enum(["", "battery", "heat"]).default(""),
+  /**
+   * Who else turned it off: "sleep" (Sleep now), "off" (the header), "manual" (sleep switched
+   * back on outside Caffeine), or "". A string rather than an enum, so a client older than a
+   * new reason still reads the status.
+   */
+  stopped: z.string().default(""),
   setup: lidSetup.default("unknown"),
   /** "needs-setup", a failed command's message, or "". */
   error: z.string().default(""),
@@ -86,7 +92,7 @@ export const status = z.object({
    */
   wakeUrl: z.string().default(""),
   battery: battery.nullable().default(null),
-  lid: lidStatus.default({ on: false, until: "", minutes: 0, forever: false, ended: "", setup: "unknown", error: "" }),
+  lid: lidStatus.default({ on: false, until: "", minutes: 0, forever: false, ended: "", stopped: "", setup: "unknown", error: "" }),
   warmup: warmupStatus.default({ enabled: false, time: "06:00", nextAt: "", lastAt: "", results: [], running: false }),
 });
 
@@ -108,6 +114,8 @@ export type Status = z.output<typeof status>;
 export type SetInput = z.output<typeof setInput>;
 export type SetOptionsInput = z.output<typeof setOptionsInput>;
 export type Battery = z.output<typeof battery>;
+/** Who turned lid mode off, when it was not a timer, a mode change, a low battery or heat. */
+export type LidStopped = "sleep" | "off" | "manual";
 export type LidSetup = z.output<typeof lidSetup>;
 export type LidStatus = z.output<typeof lidStatus>;
 export type WarmupStatus = z.output<typeof warmupStatus>;
@@ -156,11 +164,12 @@ export const sleepNow = defineRpc({
   output: status,
 });
 
-/** Turns lid mode off: the header alert's one action. Lid mode comes on only through the
- *  timer and On with the lid switch, so there is no way left to turn it on here. */
+/** "off" is the header alert's one action. "on" turns lid mode back on the way the timer or
+ *  On and the lid switch say, after something else turned it off; it never sets a length of
+ *  its own. */
 export const setLid = defineRpc({
   name: "caffeine.lid",
-  input: z.object({ lid: z.literal("off") }),
+  input: z.object({ lid: z.enum(["on", "off"]) }),
   output: status,
 });
 

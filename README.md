@@ -39,7 +39,10 @@ go of the deadline once `pmset -g` confirms sleep is back, so a failed attempt i
 Under **On** lid mode has no end and no guard: it lasts until you turn it off (another mode,
 the switch, the header, or Sleep now), the battery drops below 20% off the charger, or macOS
 reports the Mac running hot (`pmset -g therm`). The heat check applies under the timer too.
-Lid mode that ended on a low battery or heat stays off until you pick a mode again.
+Lid mode that ended on a low battery or heat, or was turned off by Sleep now, the header
+or by hand, stays off until you ask for it again: while the switch is on and a timer or On
+runs, the card says who turned it off and that a closed lid now sleeps the Mac, next to
+**Turn back on**, which picks lid mode up for the rest of the timer (or with no end under On).
 While lid mode is on, closing the lid puts the screen to sleep (`pmset displaysleepnow`,
 checked once a minute while the lid stays shut, so a panel woken under a closed lid goes dark
 again; not with an external monitor attached, which it would blank too (also one plugged in after the lid closed); with Screen Sharing into a closed Mac the shared

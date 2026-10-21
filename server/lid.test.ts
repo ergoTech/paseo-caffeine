@@ -431,6 +431,74 @@ test("the tile is told why lid mode ended by itself, until it is turned on again
   assert.equal(again.status().ended, "");
 });
 
+test("the tile is told who else turned it off: Sleep now, the header, or a hand", async () => {
+  const mac = fakeMac();
+  const lid = createLid(mac.deps);
+  await lid.start();
+  await lid.enable("forever");
+  await lid.disable("sleep now", "sleep");
+  assert.equal(lid.status().stopped, "sleep");
+  await lid.enable(30);
+  assert.equal(lid.status().stopped, "", "cleared when it comes back on");
+  await lid.disable("turned off", "off");
+  assert.equal(lid.status().stopped, "off");
+  await lid.enable("forever");
+  mac.setDisabled(false);
+  await lid.tick(null);
+  assert.equal(lid.status().stopped, "manual");
+  await lid.enable("forever");
+  await lid.disable("mode off");
+  assert.equal(lid.status().stopped, "", "a mode change is no one else");
+});
+
+test("a turn-off that does not take records no one", async () => {
+  const mac = fakeMac({ failOff: 5 });
+  const lid = createLid(mac.deps);
+  await lid.start();
+  await lid.enable("forever");
+  await lid.disable("sleep now", "sleep");
+  assert.equal(lid.status().on, true);
+  assert.equal(lid.status().stopped, "");
+});
+
+test("the latest reason replaces an earlier one: heat, then the header, reads as the header", async () => {
+  const mac = fakeMac({ hot: () => true });
+  const lid = createLid(mac.deps);
+  await lid.start();
+  await lid.enable("forever");
+  await lid.tick(null);
+  assert.equal(lid.status().ended, "heat");
+  // Switched off by hand again, then turned off from the header.
+  mac.setDisabled(true);
+  await lid.disable("turned off", "off");
+  assert.deepEqual([lid.status().ended, lid.status().stopped], ["", "off"]);
+});
+
+test("a header turn-off that does not take names no one, also when lid mode was set by hand", async () => {
+  const mac = fakeMac({ disabled: true, failOff: 5 });
+  const lid = createLid(mac.deps);
+  await lid.start();
+  await lid.disable("turned off", "off");
+  assert.equal(lid.status().on, true);
+  assert.equal(lid.status().stopped, "");
+});
+
+test("a new attempt forgets the old reason, even when it fails", async () => {
+  const mac = fakeMac();
+  const lid = createLid(mac.deps);
+  await lid.start();
+  await lid.enable("forever");
+  await lid.disable("sleep now", "sleep");
+  assert.equal(lid.status().stopped, "sleep");
+  const broken = createLid({ ...mac.deps, startGuard: async () => false });
+  await broken.start();
+  await broken.disable("sleep now", "sleep");
+  assert.equal(broken.status().stopped, "sleep");
+  await broken.enable(30);
+  assert.notEqual(broken.status().error, "");
+  assert.deepEqual([broken.status().ended, broken.status().stopped], ["", ""]);
+});
+
 test("a failed switch from a timer to always keeps the timer's guard", async () => {
   let fail = false;
   const mac = fakeMac();

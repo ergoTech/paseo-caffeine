@@ -39,6 +39,13 @@ export interface Strings {
   lidAlertLabelForever: string;
   lidEndedBattery: string;
   lidEndedHeat: string;
+  /** Lid mode off while the switch is on and a timer or On runs: who did it, then the tail. */
+  lidStoppedSleep: string;
+  lidStoppedOff: string;
+  lidStoppedManual: string;
+  lidStoppedUnknown: string;
+  lidPaused: string;
+  lidResume: string;
   lidSetup: string;
   lidSetupButton: string;
   lidFailed(message: string): string;
@@ -121,6 +128,12 @@ const en: Strings = {
   lidAlertLabelForever: "Lid · always",
   lidEndedBattery: "Turned off by itself: the battery was low.",
   lidEndedHeat: "Turned off by itself: the Mac was running hot.",
+  lidStoppedSleep: "Turned off by Sleep now.",
+  lidStoppedOff: "Turned off from the header.",
+  lidStoppedManual: "Sleep was switched back on outside Caffeine.",
+  lidStoppedUnknown: "Lid mode is off.",
+  lidPaused: "A closed lid sleeps the Mac now.",
+  lidResume: "Turn back on",
   lidSetup: "Needs a one-time permission on the Mac: it allows only this one power setting.",
   lidSetupButton: "Allow on this Mac",
   lidFailed: (message) => `Did not work: ${message}`,
@@ -197,6 +210,12 @@ const ru: Strings = {
   lidAlertLabelForever: "Крышка · всегда",
   lidEndedBattery: "Выключился сам: был низкий заряд.",
   lidEndedHeat: "Выключился сам: Mac перегревался.",
+  lidStoppedSleep: "Выключено кнопкой «Усыпить».",
+  lidStoppedOff: "Выключено кнопкой в шапке.",
+  lidStoppedManual: "Сон включили обратно не через Caffeine.",
+  lidStoppedUnknown: "Режим крышки выключен.",
+  lidPaused: "Сейчас закрытая крышка усыпит Mac.",
+  lidResume: "Включить снова",
   lidSetup: "Нужно один раз разрешить на Mac: это разрешает только эту одну настройку питания.",
   lidSetupButton: "Разрешить на этом Mac",
   lidFailed: (message) => `Не вышло: ${message}`,
@@ -273,6 +292,12 @@ const uk: Strings = {
   lidAlertLabelForever: "Кришка · завжди",
   lidEndedBattery: "Вимкнувся сам: був низький заряд.",
   lidEndedHeat: "Вимкнувся сам: Mac перегрівався.",
+  lidStoppedSleep: "Вимкнено кнопкою «Приспати».",
+  lidStoppedOff: "Вимкнено кнопкою в шапці.",
+  lidStoppedManual: "Сон увімкнули назад не через Caffeine.",
+  lidStoppedUnknown: "Режим кришки вимкнено.",
+  lidPaused: "Зараз закрита кришка приспить Mac.",
+  lidResume: "Увімкнути знову",
   lidSetup: "Потрібно один раз дозволити на Mac: це дозволяє лише одне налаштування живлення.",
   lidSetupButton: "Дозволити на цьому Mac",
   lidFailed: (message) => `Не вийшло: ${message}`,

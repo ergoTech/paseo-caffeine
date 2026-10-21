@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promise
 import { homedir, tmpdir, userInfo } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import type { Battery, LidSetup, LidStatus } from "../shared/caffeine.shared.ts";
+import type { Battery, LidSetup, LidStatus, LidStopped } from "../shared/caffeine.shared.ts";
 
 /**
  * Lid mode: the Mac keeps running with the lid closed and no display attached, for a while.
@@ -197,7 +197,8 @@ export interface Lid {
   /** `untilMs` sets the deadline outright, so lid mode ends with the timer it rides on;
    *  `minutes` is then the length the tile counts down from. */
   enable(minutes: number | "forever", untilMs?: number): Promise<void>;
-  disable(why: string): Promise<void>;
+  /** `by` says who turned it off, for the tile: "sleep" (Sleep now) or "off" (the header). */
+  disable(why: string, by?: LidStopped): Promise<void>;
   setup(): Promise<void>;
   /** Keeps the display asleep while the lid is closed and lid mode is on, checked once a
    *  minute; never while an external monitor is attached. */
@@ -257,6 +258,13 @@ export function createLid(deps: LidDeps): Lid {
 
   /** Why lid mode last ended on its own, for the tile; cleared when it is turned on again. */
   let ended: "" | "battery" | "heat" = "";
+  /** Who else turned it off, for the tile; cleared the same way. At most one of the two is
+   *  set: the latest reason replaces any earlier one, so the tile never names a stale one. */
+  let stopped: LidStopped | "" = "";
+  const because = (why: { ended?: "battery" | "heat"; stopped?: LidStopped }) => {
+    ended = why.ended ?? "";
+    stopped = why.stopped ?? "";
+  };
 
   /** Whether lid mode is on by Caffeine's own record: timed or forever. */
   const running = () => stored.until !== "" || stored.forever;
@@ -313,23 +321,27 @@ export function createLid(deps: LidDeps): Lid {
         if (!stored.forever && deadline() <= now()) return restore("time is up");
         if (battery !== null && !battery.external && battery.percent < LID_LOW_BATTERY) {
           await restore(`battery at ${battery.percent}%`);
-          if (!running()) ended = "battery";
+          if (!running()) because({ ended: "battery" });
           return;
         }
         if (await hot()) {
           await restore("the Mac is running hot");
-          if (!running()) ended = "heat";
+          if (!running()) because({ ended: "heat" });
           return;
         }
         // Turned back on by hand (`pmset -a disablesleep 0`): nothing left to time.
         if (on === false) {
           await deps.stopGuard().catch(() => undefined);
           await save(OFF_STATE);
+          because({ stopped: "manual" });
         }
       }),
 
     enable: (minutes, untilMs) =>
       serial(async () => {
+        // A new attempt: whatever turned lid mode off before is no longer the news, even if
+        // this one fails (its failure is shown on its own).
+        because({});
         await readPermission();
         if (setup !== "ready") {
           error = "needs-setup";
@@ -348,7 +360,6 @@ export function createLid(deps: LidDeps): Lid {
           }
           await deps.stopGuard().catch(() => undefined);
           error = "";
-          ended = "";
           // A lid already closed when lid mode comes on counts as just closed.
           wasClosed = false;
           externalSeen = null;
@@ -372,7 +383,6 @@ export function createLid(deps: LidDeps): Lid {
           return;
         }
         error = "";
-        ended = "";
         wasClosed = false;
         externalSeen = null;
         await save({ until: new Date(until).toISOString(), minutes, forever: false });
@@ -380,7 +390,13 @@ export function createLid(deps: LidDeps): Lid {
         log(`caffeine: lid mode on for ${minutes} min`);
       }),
 
-    disable: (why) => serial(() => restore(why)),
+    disable: (why, by) =>
+      serial(async () => {
+        await restore(why);
+        // Only once sleep is confirmed back: a turn-off that did not take names no one. A
+        // mode change (no `by`) clears the reason, since the tile has nothing to explain then.
+        if (on === false) because(by ? { stopped: by } : {});
+      }),
 
     // Outside the queue on purpose: the password dialog waits for a person, possibly minutes,
     // and the ticks behind it (which the whole controller waits on) must not. It only touches
@@ -423,7 +439,7 @@ export function createLid(deps: LidDeps): Lid {
       if (justClosed) log("caffeine: lid closed, display put to sleep");
     },
 
-    status: () => ({ on: on === true, until: stored.until, minutes: stored.minutes, forever: stored.forever, ended, setup, error }),
+    status: () => ({ on: on === true, until: stored.until, minutes: stored.minutes, forever: stored.forever, ended, stopped, setup, error }),
   };
 }
 

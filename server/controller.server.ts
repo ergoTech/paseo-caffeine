@@ -74,7 +74,7 @@ export function createController(deps: ControllerDeps): Controller {
       lidClosed: stored.lidClosed,
       wakeUrl: deps.wakeUrl?.() ?? "",
       battery,
-      lid: deps.lid?.status() ?? { on: false, until: "", minutes: 0, forever: false, ended: "", setup: "unknown", error: "" },
+      lid: deps.lid?.status() ?? { on: false, until: "", minutes: 0, forever: false, ended: "", stopped: "", setup: "unknown", error: "" },
       warmup: deps.warmup?.status() ?? { enabled: false, time: "06:00", nextAt: "", lastAt: "", results: [], running: false },
     };
   }

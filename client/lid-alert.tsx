@@ -31,7 +31,7 @@ function AlertIcon({ size, theme }: PluginButtonIconProps) {
  */
 export function contributeLidAlert(client: PluginClientContext): () => void {
   const strings = t(detectAppLocale());
-  let lid: LidStatus = { on: false, until: "", minutes: 0, forever: false, ended: "", setup: "unknown", error: "" };
+  let lid: LidStatus = { on: false, until: "", minutes: 0, forever: false, ended: "", stopped: "", setup: "unknown", error: "" };
   const buttons = new Set<PluginButtonRegistration>();
 
   const apply = () => {

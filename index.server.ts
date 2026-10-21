@@ -94,14 +94,15 @@ export default function contribute(server: PluginServerContext) {
     probe.remember(paseo);
     const instance = await startedServer();
     // With sleep switched off system-wide, `pmset sleepnow` does nothing: lid mode goes first.
-    if (lid.status().on) await lid.disable("sleep now");
+    if (lid.status().on) await lid.disable("sleep now", "sleep");
     return instance.sleep();
   });
 
   server.handle(setLid, async (input, { paseo }) => {
     probe.remember(paseo);
     const instance = await startedServer();
-    await lid.disable("turned off");
+    if (input.lid === "on") return instance.syncLid();
+    await lid.disable("turned off", "off");
     return instance.status();
   });
 
