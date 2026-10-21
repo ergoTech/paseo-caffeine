@@ -5,26 +5,25 @@ import { Icon } from "@getpaseo/plugin/client/react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Linking, Pressable, ScrollView, Text, View } from "react-native";
-import { SLEEP_DELAY_MS, type Battery, type LidMinutes, type SetInput, type SetOptionsInput, type Status, getStatus, runWarmup, setLid, setLidDisplay, setMode, setOptions, setWarmup, setupLid, sleepNow } from "../shared/caffeine.shared.ts";
+import { SLEEP_DELAY_MS, type Battery, type SetInput, type SetOptionsInput, type Status, getStatus, runWarmup, setMode, setOptions, setWarmup, setupLid, sleepNow } from "../shared/caffeine.shared.ts";
 import { type Strings, detectAppLocale, formatRemaining, t } from "./i18n.ts";
 import { SILENCE_TIMEOUT_MS, type SleepEvent, type SleepPhase, isSleepInFlight, nextSleepPhase } from "./sleep-phase.ts";
 
 const QUERY_KEY = ["caffeine", "status"] as const;
 const TIMER_MINUTES = [30, 60, 120, 180, 480, 720] as const;
 type TimerMinutes = (typeof TIMER_MINUTES)[number];
-const LID_MINUTES: readonly LidMinutes[] = [30, 60, 120];
 
 /**
  * The surface fits a phone without scrolling, and what buys the room is the shape rather
- * than the size: Off and On share a row, state and battery share a card, and no section
+ * than the size: Off, On and Sleep now share a row, state and battery share a card, and no section
  * label captions a control that already says what it is. With those, compact only has to
  * be a little tighter than the desktop — shrinking the type as well left half the screen
  * empty. While-agents-work and Timer keep rows of their own: one has a sentence that
  * should not be clipped, the other six chips that want the width.
  */
 const METRICS = {
-  compact: { gutter: 16, gap: 14, pad: 16, icon: 44, title: 22, tile: "48%" as const },
-  roomy: { gutter: 24, gap: 16, pad: 16, icon: 44, title: 24, tile: "48%" as const },
+  compact: { gutter: 16, gap: 14, pad: 16, icon: 44, title: 22, tile: "30%" as const },
+  roomy: { gutter: 24, gap: 16, pad: 16, icon: 44, title: 24, tile: "30%" as const },
 };
 
 /** Which chip a running timer belongs to: the one whose length is nearest. */
@@ -243,7 +242,7 @@ function ModeCard({
   theme: PluginTheme;
   onPress?: () => void;
   children?: React.ReactNode;
-  /** Two across on a phone, four across on a desktop. */
+  /** A share of the row: Off, On and Sleep now sit three across. */
   tile: `${number}%`;
   /** Breathes the glyph while something is in flight; steady when absent. */
   iconPulse?: Animated.Value;
@@ -398,20 +397,18 @@ function useSleepTile(poll: { dataUpdatedAt: number; errorUpdatedAt: number; isE
  * inside the house or through the VPN that puts you there.
  */
 /**
- * Lid mode's tile: the one switch that changes a system setting rather than holding the Mac
- * from inside a process, so it always runs on a clock and shows how much is left. Before the
- * one-time permission is in place it offers that instead, in one press.
+ * The timer's lid switch: with it on, the timer and On also let the lid close, for exactly as
+ * long as they last. It is the one control that changes a system setting rather than holding
+ * the Mac from inside a process, so it says what it is doing right now. Before the one-time
+ * permission is in place it offers that instead, in one press.
  */
-function LidCard({
+function LidSwitch({
   status,
   theme,
   strings,
   now,
   busy,
-  onPick,
-  onForever,
-  onStop,
-  onDark,
+  onToggle,
   onSetup,
 }: {
   status: Status;
@@ -419,71 +416,36 @@ function LidCard({
   strings: Strings;
   now: number;
   busy: boolean;
-  onPick(minutes: LidMinutes): void;
-  onForever(): void;
-  onStop(): void;
-  onDark(value: boolean): void;
+  onToggle(lidClosed: boolean): void;
   onSetup(): void;
 }) {
   const { lid } = status;
-  const remainingMs = lid.until === "" ? 0 : Math.max(0, Date.parse(lid.until) - now);
-  const lengthMs = lid.minutes * 60_000;
   const needsSetup = lid.setup === "needs-setup";
-  const detail =
-    needsSetup && !lid.on
-      ? strings.lidSetup
-      : lid.on
-        ? lid.forever
-          ? strings.lidOnForever
-          : lid.until === ""
-            ? strings.lidOnNoTimer
-            : strings.lidOn(formatRemaining(remainingMs, strings))
-        : strings.lidOff;
+  const ours = lid.forever || lid.until !== "";
+  const remainingMs = lid.until === "" ? 0 : Math.max(0, Date.parse(lid.until) - now);
+  let detail: string;
+  if (needsSetup && !lid.on) detail = strings.lidSetup;
+  else if (lid.on && !ours) detail = strings.lidOnNoTimer;
+  else if (lid.on) detail = lid.forever ? strings.lidOnForever : strings.lidOn(formatRemaining(remainingMs, strings));
+  else detail = status.lidClosed ? strings.lidIdle : strings.lidOff;
   const failed = lid.error !== "" && lid.error !== "needs-setup" ? strings.lidFailed(lid.error) : "";
   const endedNote = lid.on ? "" : lid.ended === "heat" ? strings.lidEndedHeat : lid.ended === "battery" ? strings.lidEndedBattery : "";
-
   return (
-    <View style={{ flexDirection: "row" }}>
-      <ModeCard icon={lid.on ? "LaptopMinimalCheck" : "LaptopMinimal"} title={strings.lidLabel} detail={detail} selected={lid.on} theme={theme} tile="100%">
-        {lid.on && lid.until !== "" && lengthMs > 0 ? (
-          <View style={{ height: 3, borderRadius: 2, backgroundColor: theme.colors.border, overflow: "hidden", marginTop: 4 }}>
-            <View style={{ height: 3, backgroundColor: theme.colors.accent, width: `${Math.min(100, Math.round((remainingMs / lengthMs) * 100))}%` }} />
-          </View>
+    <View style={{ gap: 6, marginTop: 6, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
+      {/* Presses are ignored while one is in flight: a "turn off" overtaken by a "turn on" is
+          exactly the mix-up this switch cannot afford. */}
+      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", alignItems: "center", opacity: busy ? 0.6 : 1 }}>
+        <Icon name={lid.on ? "LaptopMinimalCheck" : "LaptopMinimal"} size={16} color={lid.on ? theme.colors.accent : theme.colors.foregroundMuted} />
+        {/* Before the permission the switch is offered only to turn it off: switching it on
+            would do nothing until the permission is there. */}
+        {needsSetup ? <Chip label={strings.lidSetupButton} selected={false} theme={theme} onPress={() => (busy ? undefined : onSetup())} /> : null}
+        {!needsSetup || status.lidClosed ? (
+          <Chip label={strings.lidLabel} selected={status.lidClosed} theme={theme} onPress={() => (busy ? undefined : onToggle(!status.lidClosed))} />
         ) : null}
-        <View style={{ flexDirection: "row", gap: 8, marginTop: 4, flexWrap: "wrap", opacity: busy ? 0.6 : 1 }}>
-          {/* Presses are ignored while one is in flight: a "turn off" overtaken by a "turn on" is
-              exactly the mix-up this tile cannot afford. */}
-          {needsSetup ? (
-            <Chip label={strings.lidSetupButton} selected={false} theme={theme} onPress={() => (busy ? undefined : onSetup())} />
-          ) : (
-            LID_MINUTES.map((minutes) => (
-              <Chip
-                key={minutes}
-                label={formatRemaining(minutes * 60_000, strings)}
-                selected={lid.on && lid.minutes === minutes}
-                theme={theme}
-                onPress={() => (busy ? undefined : onPick(minutes))}
-              />
-            ))
-          )}
-          {needsSetup ? null : (
-            <Chip label={strings.lidForever} selected={lid.on && lid.forever} theme={theme} onPress={() => (busy ? undefined : onForever())} />
-          )}
-          {lid.on ? <Chip label={strings.lidStop} selected={false} theme={theme} onPress={() => (busy ? undefined : onStop())} /> : null}
-        </View>
-        {needsSetup ? null : (
-          <View style={{ flexDirection: "row", marginTop: 4 }}>
-            <Chip
-              label={strings.lidDark}
-              selected={lid.darkWhenClosed}
-              theme={theme}
-              onPress={() => (busy ? undefined : onDark(!lid.darkWhenClosed))}
-            />
-          </View>
-        )}
-        {endedNote !== "" ? <Text style={{ color: theme.colors.statusWarning, fontSize: 12 }}>{endedNote}</Text> : null}
-        {failed !== "" ? <Text style={{ color: theme.colors.statusDanger ?? theme.colors.foregroundMuted, fontSize: 12 }}>{failed}</Text> : null}
-      </ModeCard>
+      </View>
+      <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{detail}</Text>
+      {endedNote !== "" ? <Text style={{ color: theme.colors.statusWarning, fontSize: 12 }}>{endedNote}</Text> : null}
+      {failed !== "" ? <Text style={{ color: theme.colors.statusDanger ?? theme.colors.foregroundMuted, fontSize: 12 }}>{failed}</Text> : null}
     </View>
   );
 }
@@ -574,7 +536,6 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
   const applyMode = useRpc(setMode);
   const applyOptions = useRpc(setOptions);
   const askSleep = useRpc(sleepNow);
-  const askLid = useRpc(setLid);
   const askWarmup = useRpc(setWarmup);
   const askWarmupNow = useRpc(runWarmup);
   const askLidSetup = useRpc(setupLid);
@@ -595,17 +556,6 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
 
   const changeOptions = useMutation({
     mutationFn: (patch: SetOptionsInput) => applyOptions(patch),
-    onSuccess: (status) => queryClient.setQueryData(QUERY_KEY, status),
-  });
-
-  const askLidDisplay = useRpc(setLidDisplay);
-  const lidDisplay = useMutation({
-    mutationFn: (darkWhenClosed: boolean) => askLidDisplay({ darkWhenClosed }),
-    onSuccess: (status) => queryClient.setQueryData(QUERY_KEY, status),
-  });
-
-  const lid = useMutation({
-    mutationFn: (input: Parameters<typeof askLid>[0]) => askLid(input),
     onSuccess: (status) => queryClient.setQueryData(QUERY_KEY, status),
   });
 
@@ -669,7 +619,7 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
           {/* The phone gets the line that carries the meaning, not the one that repeats the title. */}
           {compact ? null : <Text style={{ color: theme.colors.foreground, fontSize: 14 }}>{strings.tagline}</Text>}
           <Text style={{ color: theme.colors.foregroundMuted, fontSize: 14 }}>
-            {strings.taglineDetail(data?.keepDisplay ?? false)}
+            {strings.taglineDetail}
           </Text>
         </View>
       </View>
@@ -699,12 +649,34 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
             <ModeCard
               icon="Sun"
               title={strings.on}
-              detail={strings.onDetail}
+              detail={data.lidClosed && data.lid.setup !== "needs-setup" ? strings.onDetailLid : strings.onDetail}
               selected={data.mode === "on"}
               theme={theme}
               tile={m.tile}
               onPress={() => change.mutate({ mode: "on" })}
             />
+            <ModeCard
+              icon={tile.phase === "asleep" ? "MoonStar" : "Moon"}
+              title={tile.phase === "asleep" ? strings.sleptLabel : strings.sleepLabel}
+              detail={sleepDetailFor(tile.phase, strings)}
+              selected={tile.phase !== "idle"}
+              theme={theme}
+              tile={m.tile}
+              iconPulse={tile.pulse}
+              onPress={() => sleep.mutate()}
+            >
+              {isSleepInFlight(tile.phase) ? (
+                <View style={{ height: 3, borderRadius: 2, backgroundColor: theme.colors.border, overflow: "hidden", marginTop: 4 }}>
+                  <Animated.View
+                    style={{
+                      height: 3,
+                      backgroundColor: theme.colors.accent,
+                      width: tile.countdown.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }),
+                    }}
+                  />
+                </View>
+              ) : null}
+            </ModeCard>
           </View>
 
           {/* A row each: one has a sentence to finish, the other six chips to lay out.
@@ -736,58 +708,17 @@ export function CaffeineSurface({ theme, layout }: PluginSurfaceProps) {
                   />
                 ))}
               </View>
+              <LidSwitch
+                status={data}
+                theme={theme}
+                strings={strings}
+                now={now}
+                busy={changeOptions.isPending || change.isPending || lidSetupRun.isPending}
+                onToggle={(lidClosed) => changeOptions.mutate({ lidClosed })}
+                onSetup={() => lidSetupRun.mutate()}
+              />
             </ModeCard>
           </View>
-
-          {/* Tiles rather than SettingsSwitch rows: in half a phone's width the host's switch
-              wraps its label, wraps its hint, and drops the toggle onto a line of its own. These
-              are the same tiles as the modes, and being on is shown the same way — by the border. */}
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: m.gap }}>
-            <ModeCard
-              icon={data.keepDisplay ? "Monitor" : "MonitorOff"}
-              title={strings.displayLabel}
-              detail={strings.displayState(data.keepDisplay)}
-              selected={data.keepDisplay}
-              theme={theme}
-              tile={m.tile}
-              onPress={() => changeOptions.mutate({ keepDisplay: !data.keepDisplay })}
-            />
-            <ModeCard
-              icon={tile.phase === "asleep" ? "MoonStar" : "Moon"}
-              title={tile.phase === "asleep" ? strings.sleptLabel : strings.sleepLabel}
-              detail={sleepDetailFor(tile.phase, strings)}
-              selected={tile.phase !== "idle"}
-              theme={theme}
-              tile={m.tile}
-              iconPulse={tile.pulse}
-              onPress={() => sleep.mutate()}
-            >
-              {isSleepInFlight(tile.phase) ? (
-                <View style={{ height: 3, borderRadius: 2, backgroundColor: theme.colors.border, overflow: "hidden", marginTop: 4 }}>
-                  <Animated.View
-                    style={{
-                      height: 3,
-                      backgroundColor: theme.colors.accent,
-                      width: tile.countdown.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }),
-                    }}
-                  />
-                </View>
-              ) : null}
-            </ModeCard>
-          </View>
-
-          <LidCard
-            status={data}
-            theme={theme}
-            strings={strings}
-            now={now}
-            busy={lid.isPending || lidSetupRun.isPending || lidDisplay.isPending}
-            onPick={(minutes) => lid.mutate({ lid: "on", minutes })}
-            onForever={() => lid.mutate({ lid: "forever" })}
-            onDark={(darkWhenClosed) => lidDisplay.mutate(darkWhenClosed)}
-            onStop={() => lid.mutate({ lid: "off" })}
-            onSetup={() => lidSetupRun.mutate()}
-          />
 
           <WarmupCard
             status={data}

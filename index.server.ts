@@ -1,6 +1,6 @@
 import { hostname } from "node:os";
 import type { PluginServerContext } from "@getpaseo/plugin/server";
-import { getStatus, runWarmup, setLid, setLidDisplay, setMode, setOptions, setWarmup, setupLid, sleepNow } from "./shared/caffeine.shared.ts";
+import { getStatus, runWarmup, setLid, setMode, setOptions, setWarmup, setupLid, sleepNow } from "./shared/caffeine.shared.ts";
 import { createWarmup, systemWarmupDeps } from "./server/warmup.server.ts";
 import { createLid, systemLidDeps } from "./server/lid.server.ts";
 import { createAgentsProbe } from "./server/agents.server.ts";
@@ -101,9 +101,7 @@ export default function contribute(server: PluginServerContext) {
   server.handle(setLid, async (input, { paseo }) => {
     probe.remember(paseo);
     const instance = await startedServer();
-    if (input.lid === "on") await lid.enable(input.minutes);
-    else if (input.lid === "forever") await lid.enable("forever");
-    else await lid.disable("turned off");
+    await lid.disable("turned off");
     return instance.status();
   });
 
@@ -111,7 +109,9 @@ export default function contribute(server: PluginServerContext) {
     probe.remember(paseo);
     const instance = await startedServer();
     await lid.setup();
-    return instance.status();
+    // A timer or On already running with the switch on gets its lid mode now, not at the
+    // next pick.
+    return instance.syncLid();
   });
 
   server.handle(setWarmup, async (input, { paseo }) => {
@@ -125,13 +125,6 @@ export default function contribute(server: PluginServerContext) {
     probe.remember(paseo);
     const instance = await startedServer();
     await warmup.runNow();
-    return instance.status();
-  });
-
-  server.handle(setLidDisplay, async (input, { paseo }) => {
-    probe.remember(paseo);
-    const instance = await startedServer();
-    await lid.setDarkWhenClosed(input.darkWhenClosed);
     return instance.status();
   });
 

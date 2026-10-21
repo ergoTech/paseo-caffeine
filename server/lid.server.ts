@@ -103,18 +103,14 @@ export interface LidStored {
   minutes: number;
   /** On with no end: only a person, a low battery or heat turns it off. */
   forever: boolean;
-  /** Whether the display is put to sleep when the lid closes while lid mode is on. A choice
-   *  that outlives any one session, so turning lid mode off keeps it. */
-  darkWhenClosed: boolean;
 }
 
-const OFF_STATE: LidStored = { until: "", minutes: 0, forever: false, darkWhenClosed: true };
+const OFF_STATE: LidStored = { until: "", minutes: 0, forever: false };
 
 const lidStored = z.object({
   until: z.string().default(""),
   minutes: z.number().int().nonnegative().default(0),
   forever: z.boolean().default(false),
-  darkWhenClosed: z.boolean().default(true),
 });
 
 /**
@@ -198,13 +194,14 @@ export interface Lid {
   start(): Promise<void>;
   /** Re-reads the system and ends lid mode at its deadline or on a low battery. */
   tick(battery: Battery | null): Promise<void>;
-  enable(minutes: number | "forever"): Promise<void>;
+  /** `untilMs` sets the deadline outright, so lid mode ends with the timer it rides on;
+   *  `minutes` is then the length the tile counts down from. */
+  enable(minutes: number | "forever", untilMs?: number): Promise<void>;
   disable(why: string): Promise<void>;
   setup(): Promise<void>;
   /** Keeps the display asleep while the lid is closed and lid mode is on, checked once a
    *  minute; never while an external monitor is attached. */
   checkClosed(): Promise<void>;
-  setDarkWhenClosed(value: boolean): Promise<void>;
   status(): LidStatus;
 }
 
@@ -287,7 +284,7 @@ export function createLid(deps: LidDeps): Lid {
     }
     error = "";
     await deps.stopGuard().catch(() => undefined);
-    await save({ ...OFF_STATE, darkWhenClosed: stored.darkWhenClosed });
+    await save(OFF_STATE);
     log(`caffeine: lid mode off (${why})`);
   }
 
@@ -300,7 +297,7 @@ export function createLid(deps: LidDeps): Lid {
         if (!running()) return;
         if (stored.forever) {
           // Turned back on while Paseo was down: nothing to keep.
-          if (on === false) await save({ ...OFF_STATE, darkWhenClosed: stored.darkWhenClosed });
+          if (on === false) await save(OFF_STATE);
           return;
         }
         // A deadline that passed while Paseo was down: put sleep back now.
@@ -327,11 +324,11 @@ export function createLid(deps: LidDeps): Lid {
         // Turned back on by hand (`pmset -a disablesleep 0`): nothing left to time.
         if (on === false) {
           await deps.stopGuard().catch(() => undefined);
-          await save({ ...OFF_STATE, darkWhenClosed: stored.darkWhenClosed });
+          await save(OFF_STATE);
         }
       }),
 
-    enable: (minutes) =>
+    enable: (minutes, untilMs) =>
       serial(async () => {
         await readPermission();
         if (setup !== "ready") {
@@ -355,12 +352,12 @@ export function createLid(deps: LidDeps): Lid {
           // A lid already closed when lid mode comes on counts as just closed.
           wasClosed = false;
           externalSeen = null;
-          await save({ until: "", minutes: 0, forever: true, darkWhenClosed: stored.darkWhenClosed });
+          await save({ until: "", minutes: 0, forever: true });
           await readSleep();
           log("caffeine: lid mode on with no end");
           return;
         }
-        const until = now() + minutes * 60_000;
+        const until = untilMs ?? now() + minutes * 60_000;
         // The guard first: sleep is never switched off without something set to bring it back.
         if (!(await deps.startGuard(until + GUARD_GRACE_MS))) {
           error = "could not arm the timer that turns this off (is Caffeine's background item allowed in System Settings → General → Login Items?)";
@@ -378,7 +375,7 @@ export function createLid(deps: LidDeps): Lid {
         ended = "";
         wasClosed = false;
         externalSeen = null;
-        await save({ until: new Date(until).toISOString(), minutes, forever: false, darkWhenClosed: stored.darkWhenClosed });
+        await save({ until: new Date(until).toISOString(), minutes, forever: false });
         await readSleep();
         log(`caffeine: lid mode on for ${minutes} min`);
       }),
@@ -411,7 +408,7 @@ export function createLid(deps: LidDeps): Lid {
         externalSeen = null;
       }
       wasClosed = read;
-      if (!read || !stored.darkWhenClosed || !running() || on !== true) return;
+      if (!read || !running() || on !== true) return;
       // A monitor found stays found until the lid opens. "None" is asked again every time: one
       // plugged in after the lid closed must not be blanked every minute.
       if (externalSeen !== true) {
@@ -426,9 +423,7 @@ export function createLid(deps: LidDeps): Lid {
       if (justClosed) log("caffeine: lid closed, display put to sleep");
     },
 
-    setDarkWhenClosed: (value) => serial(() => save({ ...stored, darkWhenClosed: value })),
-
-    status: () => ({ on: on === true, until: stored.until, minutes: stored.minutes, forever: stored.forever, ended, darkWhenClosed: stored.darkWhenClosed, setup, error }),
+    status: () => ({ on: on === true, until: stored.until, minutes: stored.minutes, forever: stored.forever, ended, setup, error }),
   };
 }
 

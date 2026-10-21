@@ -17,7 +17,7 @@ import {
 } from "./lid.server.ts";
 
 const T0 = Date.parse("2026-10-20T12:00:00Z");
-const OFF: LidStored = { until: "", minutes: 0, forever: false, darkWhenClosed: true };
+const OFF: LidStored = { until: "", minutes: 0, forever: false };
 
 /** A Mac in miniature: the sudo rule, the SleepDisabled switch, the guard, and every call. */
 function fakeMac(
@@ -169,7 +169,7 @@ test("turning it on arms the guard before switching sleep off, and records the d
   await lid.start();
   await lid.enable(30);
   assert.deepEqual(mac.calls, [`guard ${at(T0 + 31 * 60_000)}`, "/usr/bin/sudo -n /usr/bin/pmset -a disablesleep 1"]);
-  assert.deepEqual(mac.stored(), { until: at(T0 + 30 * 60_000), minutes: 30, forever: false, darkWhenClosed: true });
+  assert.deepEqual(mac.stored(), { until: at(T0 + 30 * 60_000), minutes: 30, forever: false });
   assert.equal(lid.status().on, true);
   assert.equal(lid.status().minutes, 30);
 });
@@ -243,7 +243,7 @@ test("a low battery ends it early, the charger does not", async () => {
 });
 
 test("a deadline that passed while Paseo was down is put right on start", async () => {
-  const mac = fakeMac({ disabled: true, stored: { until: at(T0 - 1), minutes: 30, forever: false, darkWhenClosed: true } });
+  const mac = fakeMac({ disabled: true, stored: { until: at(T0 - 1), minutes: 30, forever: false } });
   const lid = createLid(mac.deps);
   await lid.start();
   assert.equal(mac.disabled(), false);
@@ -252,7 +252,7 @@ test("a deadline that passed while Paseo was down is put right on start", async 
 });
 
 test("a deadline still ahead on start re-arms the guard, as after a reboot", async () => {
-  const mac = fakeMac({ disabled: true, stored: { until: at(T0 + 10 * 60_000), minutes: 30, forever: false, darkWhenClosed: true } });
+  const mac = fakeMac({ disabled: true, stored: { until: at(T0 + 10 * 60_000), minutes: 30, forever: false } });
   const lid = createLid(mac.deps);
   await lid.start();
   assert.deepEqual(mac.calls, [`guard ${at(T0 + 11 * 60_000)}`]);
@@ -260,7 +260,7 @@ test("a deadline still ahead on start re-arms the guard, as after a reboot", asy
 });
 
 test("a deadline that does not parse counts as due", async () => {
-  const mac = fakeMac({ disabled: true, stored: { until: "garbage", minutes: 30, forever: false, darkWhenClosed: true } });
+  const mac = fakeMac({ disabled: true, stored: { until: "garbage", minutes: 30, forever: false } });
   const lid = createLid(mac.deps);
   await lid.start();
   assert.equal(mac.disabled(), false);
@@ -276,7 +276,7 @@ test("sleep switched back on by hand ends the timing; an unreadable state does n
   assert.deepEqual(mac.stored(), OFF);
   assert.equal(mac.guard(), null);
 
-  const blind = fakeMac({ disabled: true, unreadable: true, stored: { until: at(T0 + 10 * 60_000), minutes: 30, forever: false, darkWhenClosed: true } });
+  const blind = fakeMac({ disabled: true, unreadable: true, stored: { until: at(T0 + 10 * 60_000), minutes: 30, forever: false } });
   const unknown = createLid(blind.deps);
   await unknown.start();
   await unknown.tick(null);
@@ -290,7 +290,7 @@ test("a turn-off overtaken by a turn-on runs in order: the new deadline survives
   await lid.enable(30);
   await Promise.all([lid.disable("turned off"), lid.enable(120)]);
   assert.equal(mac.disabled(), true);
-  assert.deepEqual(mac.stored(), { until: at(T0 + 120 * 60_000), minutes: 120, forever: false, darkWhenClosed: true });
+  assert.deepEqual(mac.stored(), { until: at(T0 + 120 * 60_000), minutes: 120, forever: false });
   assert.equal(mac.guard(), T0 + 121 * 60_000);
 });
 
@@ -348,7 +348,7 @@ test("always: sleep is switched off with no deadline and no guard, and time neve
   await lid.start();
   await lid.enable("forever");
   assert.deepEqual(mac.calls, ["/usr/bin/sudo -n /usr/bin/pmset -a disablesleep 1", "stop guard"], "sleep off first, then the old guard goes");
-  assert.deepEqual(mac.stored(), { until: "", minutes: 0, forever: true, darkWhenClosed: true });
+  assert.deepEqual(mac.stored(), { until: "", minutes: 0, forever: true });
   assert.equal(mac.guard(), null);
   mac.advance(30 * 24 * 60 * 60_000);
   await lid.tick(onBattery(80));
@@ -387,14 +387,14 @@ test("heat ends a timed lid mode too", async () => {
 });
 
 test("always survives a restart; one switched off by hand meanwhile is let go", async () => {
-  const kept = fakeMac({ disabled: true, stored: { until: "", minutes: 0, forever: true, darkWhenClosed: true } });
+  const kept = fakeMac({ disabled: true, stored: { until: "", minutes: 0, forever: true } });
   const lid = createLid(kept.deps);
   await lid.start();
   assert.equal(kept.disabled(), true);
   assert.deepEqual(kept.calls, [], "no guard, nothing restored");
   assert.equal(lid.status().forever, true);
 
-  const offByHand = fakeMac({ disabled: false, stored: { until: "", minutes: 0, forever: true, darkWhenClosed: true } });
+  const offByHand = fakeMac({ disabled: false, stored: { until: "", minutes: 0, forever: true } });
   await createLid(offByHand.deps).start();
   assert.deepEqual(offByHand.stored(), OFF);
 });
@@ -509,24 +509,12 @@ test("a lid that cannot be read changes nothing", async () => {
   assert.ok(!mac.calls.some((call) => call.endsWith("displaysleepnow")));
 });
 
-test("the display is left alone when lid mode is off or the switch is off", async () => {
+test("the display is left alone when lid mode is off", async () => {
   const off = fakeMac({ lidClosed: () => true });
   const idle = createLid(off.deps);
   await idle.start();
   await idle.checkClosed();
   assert.ok(!off.calls.some((call) => call.endsWith("displaysleepnow")), "lid mode off: macOS sleeps the Mac anyway");
-
-  let closed = false;
-  const mac = fakeMac({ lidClosed: () => closed });
-  const lid = createLid(mac.deps);
-  await lid.start();
-  await lid.enable("forever");
-  await lid.setDarkWhenClosed(false);
-  closed = true;
-  await lid.checkClosed();
-  assert.ok(!mac.calls.some((call) => call.endsWith("displaysleepnow")));
-  await lid.disable("turned off");
-  assert.equal(mac.stored().darkWhenClosed, false, "the choice outlives the session");
 });
 
 test("an external monitor keeps the screen on: displaysleepnow would blank it too", async () => {

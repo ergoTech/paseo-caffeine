@@ -32,8 +32,6 @@ export const battery = z.object({
   batteryWatts: z.number().nullable().default(null),
 });
 
-/** The lid timer lengths, in minutes: lid mode is for a while, never open-ended. */
-export const lidMinutes = z.union([z.literal(30), z.literal(60), z.literal(120)]);
 
 /** Whether the one-time permission for lid mode is in place. */
 export const lidSetup = z.enum(["unknown", "needs-setup", "ready"]);
@@ -49,8 +47,6 @@ export const lidStatus = z.object({
   forever: z.boolean().default(false),
   /** Why lid mode last ended by itself ("battery", "heat"), or "". */
   ended: z.enum(["", "battery", "heat"]).default(""),
-  /** Whether the display goes to sleep when the lid closes while lid mode is on. */
-  darkWhenClosed: z.boolean().default(true),
   setup: lidSetup.default("unknown"),
   /** "needs-setup", a failed command's message, or "". */
   error: z.string().default(""),
@@ -78,8 +74,8 @@ export const status = z.object({
   agents: z.number().int().nonnegative(),
   error: z.string().default(""),
   tickAt: z.string().default(""),
-  /** Whether the display is held awake along with the system. */
-  keepDisplay: z.boolean().default(false),
+  /** Whether the timer and On also let the lid close (lid mode for the same time). */
+  lidClosed: z.boolean().default(false),
   /**
    * The link that wakes this Mac from the local network, or "" when the anchor could not
    * be raised. Carried in the status rather than fetched on its own, because the address
@@ -88,7 +84,7 @@ export const status = z.object({
    */
   wakeUrl: z.string().default(""),
   battery: battery.nullable().default(null),
-  lid: lidStatus.default({ on: false, until: "", minutes: 0, forever: false, ended: "", darkWhenClosed: true, setup: "unknown", error: "" }),
+  lid: lidStatus.default({ on: false, until: "", minutes: 0, forever: false, ended: "", setup: "unknown", error: "" }),
   warmup: warmupStatus.default({ enabled: false, time: "06:00", nextAt: "", lastAt: "", results: [], running: false }),
 });
 
@@ -101,7 +97,7 @@ export const setInput = z.discriminatedUnion("mode", [
 
 /** A patch: whatever is left out keeps the value it already had. */
 export const setOptionsInput = z.object({
-  keepDisplay: z.boolean().optional(),
+  lidClosed: z.boolean().optional(),
 });
 
 export type Mode = z.output<typeof mode>;
@@ -109,7 +105,6 @@ export type Status = z.output<typeof status>;
 export type SetInput = z.output<typeof setInput>;
 export type SetOptionsInput = z.output<typeof setOptionsInput>;
 export type Battery = z.output<typeof battery>;
-export type LidMinutes = z.output<typeof lidMinutes>;
 export type LidSetup = z.output<typeof lidSetup>;
 export type LidStatus = z.output<typeof lidStatus>;
 export type WarmupStatus = z.output<typeof warmupStatus>;
@@ -158,14 +153,11 @@ export const sleepNow = defineRpc({
   output: status,
 });
 
-/** Turns lid mode on for a while, or off. */
+/** Turns lid mode off: the header alert's one action. Lid mode comes on only through the
+ *  timer and On with the lid switch, so there is no way left to turn it on here. */
 export const setLid = defineRpc({
   name: "caffeine.lid",
-  input: z.discriminatedUnion("lid", [
-    z.object({ lid: z.literal("on"), minutes: lidMinutes }),
-    z.object({ lid: z.literal("forever") }),
-    z.object({ lid: z.literal("off") }),
-  ]),
+  input: z.object({ lid: z.literal("off") }),
   output: status,
 });
 
@@ -193,9 +185,3 @@ export const runWarmup = defineRpc({
   output: status,
 });
 
-/** Lid mode's display option: put the display to sleep when the lid closes. */
-export const setLidDisplay = defineRpc({
-  name: "caffeine.lid-display",
-  input: z.object({ darkWhenClosed: z.boolean() }),
-  output: status,
-});

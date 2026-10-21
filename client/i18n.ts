@@ -4,7 +4,7 @@ export interface Strings {
   sidebarTitle: string;
   title: string;
   tagline: string;
-  taglineDetail(keepDisplay: boolean): string;
+  taglineDetail: string;
   stateAwake: string;
   stateAsleep: string;
   remaining(remaining: string): string;
@@ -17,30 +17,28 @@ export interface Strings {
   offDetail: string;
   on: string;
   onDetail: string;
+  /** On with the lid switch on. */
+  onDetailLid: string;
   timer: string;
   timerDetail: string;
   auto: string;
   autoDetail: string;
   hours(n: number): string;
   minutes(n: number): string;
-  displayLabel: string;
-  displayState(on: boolean): string;
-  /** Lid mode: the Mac keeps running with the lid closed. */
+  /** The timer's lid switch: the timer and On also let the lid close. */
   lidLabel: string;
   lidOff: string;
+  /** The switch is on, and neither the timer nor On is running. */
+  lidIdle: string;
   lidOn(remaining: string): string;
   lidOnNoTimer: string;
-  /** Lid mode with no end: the chip, the tile's line and the header label. */
-  lidForever: string;
+  /** Lid mode with no end, under On: the tile's line and the header label. */
   lidOnForever: string;
   lidAlertLabelForever: string;
   lidEndedBattery: string;
   lidEndedHeat: string;
-  /** The tile's switch: the display goes to sleep when the lid closes. */
-  lidDark: string;
   lidSetup: string;
   lidSetupButton: string;
-  lidStop: string;
   lidFailed(message: string): string;
   /** Session warm-up. `time` is "HH:MM"; `fresh` is when the window would reset. */
   warmupLabel: string;
@@ -82,18 +80,13 @@ export interface Strings {
   commandOn: string;
   commandTimer(hours: number): string;
   commandAuto: string;
-  commandDisplayOn: string;
-  commandDisplayOff: string;
 }
 
 const en: Strings = {
   sidebarTitle: "Caffeine",
   title: "Caffeine",
   tagline: "Keeps the Mac awake for your agents.",
-  taglineDetail: (keepDisplay) =>
-    keepDisplay
-      ? "System sleep and the display are both held."
-      : "Only system sleep is held; the display goes dark as usual.",
+  taglineDetail: "Only system sleep is held; the display goes dark as usual.",
   stateAwake: "AWAKE",
   stateAsleep: "SLEEPS AS USUAL",
   remaining: (remaining) => `${remaining} left`,
@@ -106,27 +99,24 @@ const en: Strings = {
   offDetail: "macOS decides",
   on: "On",
   onDetail: "until you turn it off",
+  onDetailLid: "no end, lid can close",
   timer: "Timer",
   timerDetail: "then back to Off by itself",
   auto: "While agents work",
   autoDetail: "releases three minutes after the last agent goes quiet",
   hours: (n) => `${n} h`,
   minutes: (n) => `${n} min`,
-  displayLabel: "Keep display on",
-  displayState: (on) => (on ? "the screen stays lit" : "the screen sleeps"),
-  lidLabel: "Lid closed",
-  lidOff: "A closed lid sleeps the Mac. Pick how long it may keep running with the lid shut.",
+  lidLabel: "Lid can close",
+  lidOff: "A closed lid sleeps the Mac. Switch on to keep it running with the lid shut for the timer, or under On.",
+  lidIdle: "Pick a timer or On: the lid can close for as long as it lasts.",
   lidOn: (remaining) => `You can close the lid · ${remaining} left. Sleep comes back by itself.`,
   lidOnNoTimer: "Sleep is switched off on this Mac outside Caffeine.",
-  lidForever: "Always",
-  lidOnForever: "You can close the lid, with no end. Turn it off here or from the header; a low battery or heat turns it off too.",
+  lidOnForever: "You can close the lid, with no end. Another mode, the switch or the header turns it off; so do a low battery and heat.",
   lidAlertLabelForever: "Lid · always",
   lidEndedBattery: "Turned off by itself: the battery was low.",
   lidEndedHeat: "Turned off by itself: the Mac was running hot.",
-  lidDark: "Screen off when the lid closes",
   lidSetup: "Needs a one-time permission on the Mac: it allows only this one power setting.",
   lidSetupButton: "Allow on this Mac",
-  lidStop: "Turn off",
   lidFailed: (message) => `Did not work: ${message}`,
   warmupLabel: "Session warm-up",
   warmupOn: (time, fresh) => `Every day at ${time} one short Haiku message per Claude account starts its 5-hour window, so it resets at ${fresh}. Only while the Mac is awake.`,
@@ -162,16 +152,13 @@ const en: Strings = {
   commandOn: "Caffeine: on",
   commandTimer: (hours) => `Caffeine: ${hours} hours`,
   commandAuto: "Caffeine: while agents work",
-  commandDisplayOn: "Caffeine: keep the display on",
-  commandDisplayOff: "Caffeine: let the display sleep",
 };
 
 const ru: Strings = {
   sidebarTitle: "Кофеин",
   title: "Кофеин",
   tagline: "Не даёт Mac уснуть, пока работают агенты.",
-  taglineDetail: (keepDisplay) =>
-    keepDisplay ? "Держим и систему, и экран." : "Только сон системы: экран гаснет как обычно.",
+  taglineDetail: "Только сон системы: экран гаснет как обычно.",
   stateAwake: "НЕ СПИТ",
   stateAsleep: "СПИТ КАК ОБЫЧНО",
   remaining: (remaining) => `осталось ${remaining}`,
@@ -184,27 +171,24 @@ const ru: Strings = {
   offDetail: "решает macOS",
   on: "Вкл",
   onDetail: "пока не выключишь",
+  onDetailLid: "без конца, можно с крышкой",
   timer: "Таймер",
   timerDetail: "потом сам вернётся в Выкл",
   auto: "Пока работают агенты",
   autoDetail: "отпускает через три минуты после последнего агента",
   hours: (n) => `${n} ч`,
   minutes: (n) => `${n} мин`,
-  displayLabel: "Не гасить экран",
-  displayState: (on) => (on ? "экран не гаснет" : "экран гаснет как обычно"),
-  lidLabel: "Закрытая крышка",
-  lidOff: "С закрытой крышкой Mac засыпает. Выбери, сколько ему работать с закрытой.",
+  lidLabel: "Можно закрыть крышку",
+  lidOff: "С закрытой крышкой Mac засыпает. Включи, чтобы он работал с закрытой крышкой на время таймера или в режиме Вкл.",
+  lidIdle: "Выбери таймер или Вкл: крышку можно закрыть, пока он идёт.",
   lidOn: (remaining) => `Можно закрывать крышку · осталось ${remaining}. Сон вернётся сам.`,
   lidOnNoTimer: "Сон на этом Mac выключен не через Caffeine.",
-  lidForever: "Всегда",
-  lidOnForever: "Можно закрывать крышку, без ограничения по времени. Выключи здесь или в шапке; низкий заряд или перегрев выключат сами.",
+  lidOnForever: "Можно закрывать крышку, без ограничения по времени. Выключит другой режим, переключатель или кнопка в шапке; а также низкий заряд и перегрев.",
   lidAlertLabelForever: "Крышка · всегда",
   lidEndedBattery: "Выключился сам: был низкий заряд.",
   lidEndedHeat: "Выключился сам: Mac перегревался.",
-  lidDark: "Гасить экран при закрытой крышке",
   lidSetup: "Нужно один раз разрешить на Mac: это разрешает только эту одну настройку питания.",
   lidSetupButton: "Разрешить на этом Mac",
-  lidStop: "Выключить",
   lidFailed: (message) => `Не вышло: ${message}`,
   warmupLabel: "Прогрев сессии",
   warmupOn: (time, fresh) => `Каждый день в ${time} одно короткое сообщение Haiku на каждый аккаунт Claude запускает его 5-часовое окно, и оно сбросится в ${fresh}. Только пока Mac не спит.`,
@@ -240,16 +224,13 @@ const ru: Strings = {
   commandOn: "Caffeine: включить",
   commandTimer: (hours) => `Caffeine: на ${hours} часа`,
   commandAuto: "Caffeine: пока работают агенты",
-  commandDisplayOn: "Caffeine: не гасить экран",
-  commandDisplayOff: "Caffeine: разрешить гасить экран",
 };
 
 const uk: Strings = {
   sidebarTitle: "Кофеїн",
   title: "Кофеїн",
   tagline: "Не дає Mac заснути, доки працюють агенти.",
-  taglineDetail: (keepDisplay) =>
-    keepDisplay ? "Тримаємо і систему, і екран." : "Лише сон системи: екран гасне як зазвичай.",
+  taglineDetail: "Лише сон системи: екран гасне як зазвичай.",
   stateAwake: "НЕ СПИТЬ",
   stateAsleep: "СПИТЬ ЯК ЗАЗВИЧАЙ",
   remaining: (remaining) => `залишилось ${remaining}`,
@@ -262,27 +243,24 @@ const uk: Strings = {
   offDetail: "вирішує macOS",
   on: "Увімк",
   onDetail: "доки не вимкнеш",
+  onDetailLid: "без кінця, можна з кришкою",
   timer: "Таймер",
   timerDetail: "потім сам повернеться у Вимк",
   auto: "Доки працюють агенти",
   autoDetail: "відпускає через три хвилини після останнього агента",
   hours: (n) => `${n} год`,
   minutes: (n) => `${n} хв`,
-  displayLabel: "Не гасити екран",
-  displayState: (on) => (on ? "екран не гасне" : "екран гасне як завжди"),
-  lidLabel: "Закрита кришка",
-  lidOff: "Із закритою кришкою Mac засинає. Обери, скільки йому працювати із закритою.",
+  lidLabel: "Можна закрити кришку",
+  lidOff: "Із закритою кришкою Mac засинає. Увімкни, щоб він працював із закритою кришкою на час таймера або в режимі Увімк.",
+  lidIdle: "Обери таймер або Увімк: кришку можна закрити, поки він триває.",
   lidOn: (remaining) => `Можна закривати кришку · лишилось ${remaining}. Сон повернеться сам.`,
   lidOnNoTimer: "Сон на цьому Mac вимкнено не через Caffeine.",
-  lidForever: "Завжди",
-  lidOnForever: "Можна закривати кришку, без обмеження в часі. Вимкни тут або в шапці; низький заряд чи перегрів вимкнуть самі.",
+  lidOnForever: "Можна закривати кришку, без обмеження в часі. Вимкне інший режим, перемикач або кнопка в шапці; а також низький заряд і перегрів.",
   lidAlertLabelForever: "Кришка · завжди",
   lidEndedBattery: "Вимкнувся сам: був низький заряд.",
   lidEndedHeat: "Вимкнувся сам: Mac перегрівався.",
-  lidDark: "Гасити екран при закритій кришці",
   lidSetup: "Потрібно один раз дозволити на Mac: це дозволяє лише одне налаштування живлення.",
   lidSetupButton: "Дозволити на цьому Mac",
-  lidStop: "Вимкнути",
   lidFailed: (message) => `Не вийшло: ${message}`,
   warmupLabel: "Прогрів сесії",
   warmupOn: (time, fresh) => `Щодня о ${time} одне коротке повідомлення Haiku на кожен акаунт Claude запускає його 5-годинне вікно, і воно скинеться о ${fresh}. Лише поки Mac не спить.`,
@@ -318,8 +296,6 @@ const uk: Strings = {
   commandOn: "Caffeine: увімкнути",
   commandTimer: (hours) => `Caffeine: на ${hours} години`,
   commandAuto: "Caffeine: доки працюють агенти",
-  commandDisplayOn: "Caffeine: не гасити екран",
-  commandDisplayOff: "Caffeine: дозволити гасити екран",
 };
 
 const catalogue: Record<Locale, Strings> = { en, ru, uk };
