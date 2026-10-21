@@ -96,7 +96,7 @@ function fakeMac(
   };
 }
 
-const onBattery = (percent: number): Battery => ({ percent, charging: false, charged: false, external: false, minutes: null });
+const onBattery = (percent: number): Battery => ({ percent, charging: false, charged: false, external: false, minutes: null, adapterWatts: null, inputWatts: null, batteryWatts: null });
 const at = (ms: number) => new Date(ms).toISOString();
 
 test("pmset's SleepDisabled line is read, and its absence is not a yes", () => {

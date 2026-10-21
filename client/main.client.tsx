@@ -61,6 +61,11 @@ function Card({ theme, pad, children, style }: { theme: PluginTheme; pad: number
   );
 }
 
+/** Watts as a person reads them off a charger: whole above ten, one decimal below. */
+function formatWatts(watts: number): string {
+  return `${watts >= 10 ? Math.round(watts) : watts.toFixed(1)} W`;
+}
+
 /** Green with room to spare, amber when it is getting thin, red near empty. */
 function batteryColour(battery: Battery, theme: PluginTheme): string {
   if (battery.external) return theme.colors.statusSuccess;
@@ -84,49 +89,64 @@ function BatteryRow({ battery, theme, strings }: { battery: Battery; theme: Plug
   else if (battery.charged) detail = strings.batteryCharged;
   else detail = eta ? strings.batteryUntilEmpty(eta) : strings.batteryNoEstimate;
 
+  // On the charger, what it is pulling now sits next to the charge, and what the charger
+  // is rated for and how much of it reaches the battery go on a quieter line underneath.
+  const intake = battery.external && battery.inputWatts !== null ? formatWatts(battery.inputWatts) : null;
+  const flow: string[] = [];
+  if (battery.external && battery.adapterWatts !== null) flow.push(strings.wattsAdapter(formatWatts(battery.adapterWatts)));
+  if (battery.external && battery.batteryWatts !== null && battery.batteryWatts > 0) {
+    flow.push(strings.wattsIntoBattery(formatWatts(battery.batteryWatts)));
+  }
+
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <View
-          style={{
-            width: 64,
-            height: 30,
-            borderRadius: 8,
-            borderWidth: 2,
-            borderColor: theme.colors.border,
-            padding: 3,
-            justifyContent: "center",
-          }}
-        >
-          {/* Never a bare sliver: a one percent charge still shows as something. */}
+    <View style={{ gap: 6 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
           <View
             style={{
-              width: `${Math.max(4, battery.percent)}%`,
-              height: "100%",
-              borderRadius: 3,
-              backgroundColor: colour,
+              width: 64,
+              height: 30,
+              borderRadius: 8,
+              borderWidth: 2,
+              borderColor: theme.colors.border,
+              padding: 3,
+              justifyContent: "center",
+            }}
+          >
+            {/* Never a bare sliver: a one percent charge still shows as something. */}
+            <View
+              style={{
+                width: `${Math.max(4, battery.percent)}%`,
+                height: "100%",
+                borderRadius: 3,
+                backgroundColor: colour,
+              }}
+            />
+          </View>
+          <View
+            style={{
+              width: 3,
+              height: 10,
+              marginLeft: 1,
+              borderTopRightRadius: 2,
+              borderBottomRightRadius: 2,
+              backgroundColor: theme.colors.border,
             }}
           />
         </View>
-        <View
-          style={{
-            width: 3,
-            height: 10,
-            marginLeft: 1,
-            borderTopRightRadius: 2,
-            borderBottomRightRadius: 2,
-            backgroundColor: theme.colors.border,
-          }}
-        />
-      </View>
 
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
-        <Text style={{ color: theme.colors.foreground, fontSize: 24, fontWeight: "700" }}>{`${battery.percent}%`}</Text>
-        {battery.charging ? <Icon name="Zap" size={15} color={colour} /> : null}
-        <Text style={{ color: theme.colors.foregroundMuted, fontSize: 13, flex: 1, textAlign: "right" }}>
-          {`${battery.external ? strings.powerAC : strings.powerBattery} · ${detail}`}
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
+          <Text style={{ color: theme.colors.foreground, fontSize: 24, fontWeight: "700" }}>{`${battery.percent}%`}</Text>
+          {battery.charging ? <Icon name="Zap" size={15} color={colour} /> : null}
+          {intake ? <Text style={{ color: colour, fontSize: 15, fontWeight: "700" }}>{intake}</Text> : null}
+          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 13, flex: 1, textAlign: "right" }}>
+            {`${battery.external ? strings.powerAC : strings.powerBattery} · ${detail}`}
+          </Text>
+        </View>
       </View>
+      {flow.length > 0 ? (
+        <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, textAlign: "right" }}>{flow.join(" · ")}</Text>
+      ) : null}
     </View>
   );
 }

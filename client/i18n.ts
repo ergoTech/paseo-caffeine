@@ -71,6 +71,9 @@ export interface Strings {
   batteryNoEstimate: string;
   powerAC: string;
   powerBattery: string;
+  /** What the charger is rated for, and what of it goes into the battery. */
+  wattsAdapter(watts: string): string;
+  wattsIntoBattery(watts: string): string;
   updated(secondsAgo: number): string;
   errorPrefix: string;
   /** The Command Center rows. Each one carries the plugin's name, because ⌘K is a flat
@@ -151,6 +154,8 @@ const en: Strings = {
   batteryNoEstimate: "working out the estimate",
   powerAC: "on the charger",
   powerBattery: "on battery",
+  wattsAdapter: (watts) => `charger ${watts}`,
+  wattsIntoBattery: (watts) => `into the battery ${watts}`,
   updated: (s) => (s < 5 ? "updated just now" : `updated ${s} s ago`),
   errorPrefix: "caffeinate failed",
   commandOff: "Caffeine: off",
@@ -227,6 +232,8 @@ const ru: Strings = {
   batteryNoEstimate: "считает оценку",
   powerAC: "от сети",
   powerBattery: "от батареи",
+  wattsAdapter: (watts) => `блок ${watts}`,
+  wattsIntoBattery: (watts) => `в батарею ${watts}`,
   updated: (s) => (s < 5 ? "обновлено только что" : `обновлено ${s} с назад`),
   errorPrefix: "caffeinate не запустился",
   commandOff: "Caffeine: выключить",
@@ -303,6 +310,8 @@ const uk: Strings = {
   batteryNoEstimate: "рахує оцінку",
   powerAC: "від мережі",
   powerBattery: "від батареї",
+  wattsAdapter: (watts) => `блок ${watts}`,
+  wattsIntoBattery: (watts) => `у батарею ${watts}`,
   updated: (s) => (s < 5 ? "оновлено щойно" : `оновлено ${s} с тому`),
   errorPrefix: "caffeinate не запустився",
   commandOff: "Caffeine: вимкнути",

@@ -188,7 +188,7 @@ test("the battery is read once a tick and reaches the status", async () => {
     runningCount: async () => 0,
     readBattery: async () => {
       reads += 1;
-      return { percent: 42, charging: true, charged: false, external: true, minutes: 90 };
+      return { percent: 42, charging: true, charged: false, external: true, minutes: 90, adapterWatts: 96, inputWatts: 61, batteryWatts: 38 };
     },
     tickMs: 60 * 60_000,
   });

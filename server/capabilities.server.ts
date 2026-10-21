@@ -87,7 +87,7 @@ export const OPERATIONS: CaffeineOperation[] = [
     default: true,
     title: "Keep-awake status",
     description:
-      "Whether the Mac is held awake now (active), the mode: off, on, timer (until the time in `until`) or auto (while agents work); busy = an agent worked in the last few minutes; how many agents run now; whether the display is held too; and the battery.",
+      "Whether the Mac is held awake now (active), the mode: off, on, timer (until the time in `until`) or auto (while agents work); busy = an agent worked in the last few minutes; how many agents run now; whether the display is held too; and the battery, with the watts on the charger (adapterWatts = what the charger is rated for, inputWatts = what the Mac draws from it now, batteryWatts = into the battery when positive, out of it when negative).",
     input: none,
     fields: STATUS_FIELDS,
   },

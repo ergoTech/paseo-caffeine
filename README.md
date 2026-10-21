@@ -46,7 +46,9 @@ are watched only while Paseo runs; with Paseo closed, Always stays on until you 
 disablesleep 0`. To undo the permission: `sudo rm /etc/sudoers.d/paseo-caffeine`.
 
 The surface also shows the Mac's own battery: charge, whether the charger is in, and how
-long the charge has left — or how long until it is full.
+long the charge has left — or how long until it is full. On the charger it also shows the
+watts, the way Wattage Connected does: what the Mac is drawing now next to the charge, and
+what the charger is rated for and how much goes into the battery underneath.
 
 ## Installing it
 
@@ -152,6 +154,11 @@ The battery comes from `pmset -g batt`, parsed rather than computed — `0:00 re
 next to `charged` means "not applicable", and `(no estimate)` means pmset is still
 working it out. Both read as no estimate rather than as no time left. A machine without
 a battery simply has no card.
+
+The watts come from `ioreg -rw0 -c AppleSmartBattery`, read alongside pmset: the charger's
+rating from `AdapterDetails`, the power in from `PowerTelemetryData.SystemPowerIn`, and the
+battery's flow from its `Voltage` times its `Amperage` (a signed number printed as an
+unsigned one). If ioreg fails, the battery still shows, without watts.
 
 The mode lives in `~/.jobby-jobs/caffeine.json` — a fixed path, because a plugin cannot
 find its own directory.

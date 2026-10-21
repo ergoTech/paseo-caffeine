@@ -24,6 +24,12 @@ export const battery = z.object({
   external: z.boolean(),
   /** Minutes until empty, or until full while charging; null when there is no estimate. */
   minutes: z.number().int().nonnegative().nullable(),
+  /** What the charger is rated for, in watts; null off the charger or when macOS will not say. */
+  adapterWatts: z.number().nonnegative().nullable().default(null),
+  /** What the Mac is taking from the charger right now, in watts; null off the charger. */
+  inputWatts: z.number().nonnegative().nullable().default(null),
+  /** Into the battery when positive, out of it when negative; null when unknown. */
+  batteryWatts: z.number().nullable().default(null),
 });
 
 /** The lid timer lengths, in minutes: lid mode is for a while, never open-ended. */
